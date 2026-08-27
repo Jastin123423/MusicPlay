@@ -1,0 +1,8 @@
+{
+  "name": " MusiPlay",
+  "description": "A powerful offline music player with multi-queue support, folder browsing, equalizer, sleep timer, real-time audio synthesizer, and tag editor.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
