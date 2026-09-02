@@ -11,7 +11,7 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "co.musicplay.ap.iobiel"
+    applicationId = "co.musicplay.ap"
     minSdk = 24
     targetSdk = 36
     versionCode = 1
@@ -24,6 +24,20 @@ android {
     create("release") {
       val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
       val keystoreFile = file(keystorePath)
+      if (!keystoreFile.exists() && keystorePath.endsWith("my-upload-key.jks")) {
+        try {
+          val process = ProcessBuilder(
+            "keytool", "-genkeypair", "-v",
+            "-keystore", keystoreFile.absolutePath,
+            "-alias", System.getenv("KEY_ALIAS") ?: "upload",
+            "-keyalg", "RSA", "-keysize", "2048", "-validity", "10000",
+            "-storepass", System.getenv("STORE_PASSWORD") ?: "52775277Tanzania",
+            "-keypass", System.getenv("KEY_PASSWORD") ?: "52775277Tanzania",
+            "-dname", "CN=Music Player, OU=Android, O=co.musicplay.ap, L=Dar es Salaam, ST=Dar es Salaam, C=TZ"
+          ).redirectErrorStream(true).start()
+          process.waitFor()
+        } catch (_: Exception) {}
+      }
       if (keystoreFile.exists()) {
         storeFile = keystoreFile
         storePassword = System.getenv("STORE_PASSWORD") ?: "52775277Tanzania"
