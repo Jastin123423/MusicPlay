@@ -33,6 +33,23 @@ jobs:
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "Decoding Keystore from GitHub Secret..."
             echo "$KEYSTORE_BASE64" | base64 --decode > my-upload-key.jks
+          elif [ -f "my-upload-key.jks" ]; then
+            echo "Keystore my-upload-key.jks already exists, checking alias..."
+            if keytool -list -keystore my-upload-key.jks -storepass "52775277Tanzania" -alias "upload" >/dev/null 2>&1; then
+              echo "Keystore verified with alias 'upload'."
+            else
+              echo "Alias 'upload' missing or invalid, regenerating my-upload-key.jks..."
+              rm -f my-upload-key.jks
+              keytool -genkeypair -v \
+                -keystore my-upload-key.jks \
+                -alias "upload" \
+                -keyalg RSA \
+                -keysize 2048 \
+                -validity 10000 \
+                -storepass "52775277Tanzania" \
+                -keypass "52775277Tanzania" \
+                -dname "CN=Music Player, OU=Android, O=co.musicplay.ap, L=Dar es Salaam, ST=Dar es Salaam, C=TZ"
+            fi
           else
             echo "Generating Keystore with alias 'upload'..."
             keytool -genkeypair -v \
