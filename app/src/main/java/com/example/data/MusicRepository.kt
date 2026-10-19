@@ -133,10 +133,67 @@ class MusicRepository(private val musicDao: MusicDao) {
                 musicDao.insertQueue(q1.copy(trackIdsString = newTrackIds.joinToString(",")))
             }
         } else {
-            val currentQueues = allQueues.first()
-            if (currentQueues.isEmpty()) {
-                musicDao.insertQueue(PlaybackQueue(queueId = 1, name = "Primary Queue", trackIdsString = "", currentIndex = 0, currentPositionMs = 0L))
-            }
+            // Provide built-in demo tracks so the DJ crossfade is immediately testable and playable
+            val demoTracks = listOf(
+                MusicTrack(
+                    title = "Neon Skyline",
+                    artist = "Retro Synth Pro",
+                    album = "Club Odyssey",
+                    genre = "Synthwave",
+                    year = "2026",
+                    trackNumber = "1",
+                    durationSec = 25,
+                    lyrics = "Cruising down the electric neon highway...",
+                    folder = "Built-in DJ Library",
+                    bitrate = "320 kbps",
+                    sampleRate = "44.1 kHz"
+                ),
+                MusicTrack(
+                    title = "Solar Horizon",
+                    artist = "Pulse Masters",
+                    album = "Electric Dreams",
+                    genre = "Ambient",
+                    year = "2026",
+                    trackNumber = "2",
+                    durationSec = 22,
+                    lyrics = "Floating on cosmic waves of sound...",
+                    folder = "Built-in DJ Library",
+                    bitrate = "320 kbps",
+                    sampleRate = "44.1 kHz"
+                ),
+                MusicTrack(
+                    title = "Midnight Echoes",
+                    artist = "DJ Orbit",
+                    album = "Club Odyssey",
+                    genre = "Electronic",
+                    year = "2026",
+                    trackNumber = "3",
+                    durationSec = 28,
+                    lyrics = "Feel the rhythm in the digital pulse...",
+                    folder = "Built-in DJ Library",
+                    bitrate = "320 kbps",
+                    sampleRate = "44.1 kHz"
+                ),
+                MusicTrack(
+                    title = "Cyber Lounge",
+                    artist = "Echo Collective",
+                    album = "Electric Dreams",
+                    genre = "Synthwave",
+                    year = "2026",
+                    trackNumber = "4",
+                    durationSec = 24,
+                    lyrics = "Deep bass and glowing city lights...",
+                    folder = "Built-in DJ Library",
+                    bitrate = "320 kbps",
+                    sampleRate = "44.1 kHz"
+                )
+            )
+            musicDao.insertTracks(demoTracks)
+            val newTracks = allTracks.first()
+            val newTrackIds = newTracks.map { it.id }
+            val q1Ids = newTrackIds.joinToString(",")
+            musicDao.insertQueue(PlaybackQueue(queueId = 1, name = "Primary Queue", trackIdsString = q1Ids, currentIndex = 0, currentPositionMs = 0L))
+            musicDao.insertQueue(PlaybackQueue(queueId = 2, name = "Favorites & Quick Queue", trackIdsString = "", currentIndex = 0, currentPositionMs = 0L))
         }
 
         return audioList.size

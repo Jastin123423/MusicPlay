@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -38,6 +39,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -49,6 +51,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import com.example.R
+import com.example.audio.DjCurveType
 import com.example.audio.RepeatMode
 import com.example.data.MusicTrack
 import com.example.data.PlaybackQueue
@@ -208,6 +211,9 @@ fun MusicMainScreen(viewModel: MusicViewModel, modifier: Modifier = Modifier) {
     val currentSecs by viewModel.playbackManager.currentPositionSec.collectAsState()
 
     var showFullPlayer by remember { mutableStateOf(false) }
+    var showTopDjDialog by remember { mutableStateOf(false) }
+    val crossfadeEnabled by viewModel.playbackManager.crossfadeEnabled.collectAsState()
+    val crossfadeSec by viewModel.playbackManager.crossfadeSec.collectAsState()
     var trackForOptions by remember { mutableStateOf<MusicTrack?>(null) }
     var trackForTagEdit by remember { mutableStateOf<MusicTrack?>(null) }
     var playlistForTracks by remember { mutableStateOf<Playlist?>(null) }
@@ -285,6 +291,18 @@ fun MusicMainScreen(viewModel: MusicViewModel, modifier: Modifier = Modifier) {
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             }
+                        }
+
+                        // DJ Crossfade Settings quick button
+                        IconButton(
+                            onClick = { showTopDjDialog = true },
+                            modifier = Modifier.testTag("dj_crossfade_top_btn")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.AutoAwesome,
+                                contentDescription = "DJ Crossfade Settings",
+                                tint = if (crossfadeEnabled && crossfadeSec > 0) MaterialTheme.colorScheme.primary else TextMuted
+                            )
                         }
 
                         // Multi-Queue Selector pill
@@ -568,6 +586,14 @@ fun MusicMainScreen(viewModel: MusicViewModel, modifier: Modifier = Modifier) {
                 }
             }
         }
+    }
+
+    // Modal DJ Crossfade Settings Dialog
+    if (showTopDjDialog) {
+        DjCrossfadeDialog(
+            viewModel = viewModel,
+            onDismiss = { showTopDjDialog = false }
+        )
     }
 
     // Modal sheet full player overlay
@@ -1723,6 +1749,12 @@ fun FullPlayerSheet(
     val isShuffle by viewModel.playbackManager.isShuffle.collectAsState()
     val crossfadeSec by viewModel.playbackManager.crossfadeSec.collectAsState()
     val isGapless by viewModel.playbackManager.gaplessEnabled.collectAsState()
+    val crossfadeEnabled by viewModel.playbackManager.crossfadeEnabled.collectAsState()
+    val djModeEnabled by viewModel.playbackManager.djModeEnabled.collectAsState()
+    val djCurveType by viewModel.playbackManager.djCurveType.collectAsState()
+    val isCrossfading by viewModel.playbackManager.isCrossfading.collectAsState()
+    val crossfadeProgress by viewModel.playbackManager.crossfadeProgress.collectAsState()
+    val incomingTrack by viewModel.playbackManager.incomingTrack.collectAsState()
     
     val eqGains by viewModel.playbackManager.eqGains.collectAsState()
     val bassBoost by viewModel.playbackManager.bassBoostStrength.collectAsState()
@@ -1732,6 +1764,7 @@ fun FullPlayerSheet(
     val sleepTimerRemaining by viewModel.playbackManager.sleepTimerMinutes.collectAsState()
 
     var showEqPanel by remember { mutableStateOf(false) }
+    var showDjPanel by remember { mutableStateOf(false) }
     var showLyricsPanel by remember { mutableStateOf(false) }
     var showTimerPanel by remember { mutableStateOf(false) }
     var showDetailsPanel by remember { mutableStateOf(false) }
@@ -1847,6 +1880,66 @@ fun FullPlayerSheet(
                         .padding(top = 4.dp)
                 )
 
+                // Live DJ Crossfading Banner
+                AnimatedVisibility(visible = isCrossfading) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        colors = CardDefaults.cardColors(containerColor = TealPrimary.copy(alpha = 0.18f)),
+                        border = BorderStroke(1.dp, TealPrimary)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Filled.AutoAwesome,
+                                        contentDescription = "DJ Mixing",
+                                        tint = TealPrimary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "DJ CROSSFADING",
+                                        style = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp),
+                                        color = TealPrimary
+                                    )
+                                }
+                                Text(
+                                    text = "${(crossfadeProgress * 100).toInt()}%",
+                                    style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold),
+                                    color = TextLight
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Blending into: ${incomingTrack?.title ?: "Next Song"}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextLight,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            LinearProgressIndicator(
+                                progress = { crossfadeProgress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp)
+                                    .clip(RoundedCornerShape(2.dp)),
+                                color = TealPrimary,
+                                trackColor = SpaceDarkBg
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Interactive icons panel: Equalizer, Lyrics, Sleep Timer, Favorites, Track Info
@@ -1870,6 +1963,15 @@ fun FullPlayerSheet(
                             imageVector = Icons.Filled.Tune,
                             contentDescription = "Equalizer & DSP",
                             tint = if (showEqPanel) TealPrimary else TextLight
+                        )
+                    }
+
+                    // DJ Crossfade Settings Trigger
+                    IconButton(onClick = { showDjPanel = !showDjPanel }) {
+                        Icon(
+                            imageVector = Icons.Filled.AutoAwesome,
+                            contentDescription = "DJ Crossfade",
+                            tint = if (showDjPanel || isCrossfading) TealPrimary else TextLight
                         )
                     }
 
@@ -2052,33 +2154,17 @@ fun FullPlayerSheet(
                                 colors = SliderDefaults.colors(thumbColor = TealPrimary, activeTrackColor = TealPrimary, inactiveTrackColor = SpaceDarkBg)
                             )
 
-                            // Crossfade & Gapless
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Crossfade Duration", style = MaterialTheme.typography.bodySmall, color = TextLight, fontWeight = FontWeight.Bold)
-                                Text("${crossfadeSec}s", style = MaterialTheme.typography.bodySmall, color = TealPrimary)
-                            }
-                            Slider(
-                                value = crossfadeSec.toFloat(),
-                                onValueChange = { viewModel.playbackManager.setCrossfade(it.toInt()) },
-                                valueRange = 0f..5f,
-                                steps = 4,
-                                colors = SliderDefaults.colors(thumbColor = TealPrimary, activeTrackColor = TealPrimary, inactiveTrackColor = SpaceDarkBg)
-                            )
+                            HorizontalDivider(color = SpaceDarkBg, modifier = Modifier.padding(vertical = 12.dp))
 
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Gapless Track Transition", style = MaterialTheme.typography.bodySmall, color = TextLight, fontWeight = FontWeight.Bold)
-                                Switch(
-                                    checked = isGapless,
-                                    onCheckedChange = { viewModel.playbackManager.setGapless(it) },
-                                    colors = SwitchDefaults.colors(checkedThumbColor = OnTeal, checkedTrackColor = TealPrimary)
-                                )
-                            }
+                            // Professional DJ Crossfade Controls inside EQ Panel
+                            DjCrossfadeSettingsSection(viewModel = viewModel)
                         }
                     }
+                }
+
+                // Dedicated DJ Crossfade Panel
+                AnimatedVisibility(visible = showDjPanel) {
+                    DjCrossfadeSettingsCard(viewModel = viewModel)
                 }
 
                 // Interactive Sleep Timer setup panel
@@ -2619,3 +2705,349 @@ fun PlaylistDetailDialog(
         }
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Professional DJ Crossfade Components
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+fun DjCrossfadeSettingsSection(
+    viewModel: MusicViewModel,
+    modifier: Modifier = Modifier
+) {
+    val crossfadeEnabled by viewModel.playbackManager.crossfadeEnabled.collectAsState()
+    val crossfadeSec by viewModel.playbackManager.crossfadeSec.collectAsState()
+    val djModeEnabled by viewModel.playbackManager.djModeEnabled.collectAsState()
+    val djCurveType by viewModel.playbackManager.djCurveType.collectAsState()
+    val isGapless by viewModel.playbackManager.gaplessEnabled.collectAsState()
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        // Crossfade ON / OFF Toggle
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Crossfade",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = TextLight
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(if (crossfadeEnabled && crossfadeSec > 0) TealPrimary else SpaceDarkBg)
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = if (crossfadeEnabled && crossfadeSec > 0) "ON" else "OFF",
+                            style = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                            color = if (crossfadeEnabled && crossfadeSec > 0) OnTeal else TextMuted
+                        )
+                    }
+                }
+                Text(
+                    text = "Seamless continuous mixing between songs",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMuted
+                )
+            }
+            Switch(
+                checked = crossfadeEnabled && crossfadeSec > 0,
+                onCheckedChange = { isChecked ->
+                    viewModel.playbackManager.setCrossfadeEnabled(isChecked)
+                    if (isChecked && crossfadeSec == 0) {
+                        viewModel.playbackManager.setCrossfadeSec(8)
+                    }
+                },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = OnTeal,
+                    checkedTrackColor = TealPrimary
+                )
+            )
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Transition Duration Display & Preset buttons
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Transition Duration",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextLight,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = if (!crossfadeEnabled || crossfadeSec == 0) "Off (0 seconds)" else "${crossfadeSec} seconds",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold,
+                color = TealPrimary
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Preset Duration Chips: Off (0s), 3s, 5s, 8s (Default), 10s, 12s, 15s, 20s
+        val durationOptions = listOf(0, 3, 5, 8, 10, 12, 15, 20)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            durationOptions.forEach { sec ->
+                val isSelected = crossfadeEnabled && (crossfadeSec == sec)
+                val label = if (sec == 0) "Off" else "${sec}s"
+                FilterChip(
+                    selected = isSelected,
+                    onClick = {
+                        viewModel.playbackManager.setCrossfadeSec(sec)
+                        if (sec == 0) {
+                            viewModel.playbackManager.setCrossfadeEnabled(false)
+                        } else {
+                            viewModel.playbackManager.setCrossfadeEnabled(true)
+                        }
+                    },
+                    label = {
+                        Text(
+                            text = if (sec == 8) "$label (Default)" else label,
+                            style = TextStyle(fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
+                        )
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = TealPrimary,
+                        selectedLabelColor = OnTeal,
+                        containerColor = SpaceDarkBg,
+                        labelColor = TextLight
+                    ),
+                    border = BorderStroke(1.dp, if (isSelected) TealPrimary else SpaceDarkBg)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Duration Slider (0 to 20 seconds)
+        Slider(
+            value = (if (crossfadeEnabled) crossfadeSec else 0).toFloat(),
+            onValueChange = { newVal ->
+                val s = newVal.toInt()
+                viewModel.playbackManager.setCrossfadeSec(s)
+            },
+            valueRange = 0f..20f,
+            steps = 19,
+            colors = SliderDefaults.colors(
+                thumbColor = TealPrimary,
+                activeTrackColor = TealPrimary,
+                inactiveTrackColor = SpaceDarkBg
+            )
+        )
+
+        // Guide text per specification
+        Text(
+            text = "Short transitions: 3–5 seconds. Balanced transitions: 8–10 seconds. Long transitions: 12–20 seconds.",
+            style = TextStyle(fontSize = 11.sp, color = TextMuted),
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+
+        HorizontalDivider(color = SpaceDarkBg, modifier = Modifier.padding(vertical = 8.dp))
+
+        // Advanced DJ Equal-Power Curves
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "Equal-Power Volume Curve",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextLight,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Maintains constant perceived acoustic volume during mixing",
+                    style = TextStyle(fontSize = 10.sp, color = TextMuted)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            val curves = listOf(
+                DjCurveType.EQUAL_POWER to "Equal-Power (DJ)",
+                DjCurveType.EXPONENTIAL to "Exponential",
+                DjCurveType.LINEAR to "Linear"
+            )
+            curves.forEach { (type, title) ->
+                val isSelected = djCurveType.equals(type.name, ignoreCase = true)
+                FilterChip(
+                    selected = isSelected,
+                    onClick = { viewModel.playbackManager.setDjCurveType(type.name) },
+                    label = {
+                        Text(
+                            text = title,
+                            style = TextStyle(fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
+                        )
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = TealPrimary,
+                        selectedLabelColor = OnTeal,
+                        containerColor = SpaceDarkBg,
+                        labelColor = TextLight
+                    ),
+                    border = BorderStroke(1.dp, if (isSelected) TealPrimary else SpaceDarkBg)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Gapless Transition Toggle
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Gapless Playback Fallback",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextLight,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Zero silence track changeover when crossfade is Off",
+                    style = TextStyle(fontSize = 10.sp, color = TextMuted)
+                )
+            }
+            Switch(
+                checked = isGapless,
+                onCheckedChange = { viewModel.playbackManager.setGapless(it) },
+                colors = SwitchDefaults.colors(checkedThumbColor = OnTeal, checkedTrackColor = TealPrimary)
+            )
+        }
+    }
+}
+
+@Composable
+fun DjCrossfadeSettingsCard(
+    viewModel: MusicViewModel,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = SpaceCardBg),
+        border = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.5f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.AutoAwesome,
+                    contentDescription = "DJ",
+                    tint = TealPrimary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "DJ Crossfade & Transitions",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = TealPrimary
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            DjCrossfadeSettingsSection(viewModel = viewModel)
+        }
+    }
+}
+
+@Composable
+fun DjCrossfadeDialog(
+    viewModel: MusicViewModel,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            colors = CardDefaults.cardColors(containerColor = SpaceCardBg),
+            shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.4f))
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(TealPrimary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.AutoAwesome,
+                                contentDescription = "DJ",
+                                tint = OnTeal,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "DJ Crossfade Settings",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = TextLight
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(imageVector = Icons.Filled.Close, contentDescription = "Close", tint = TextLight)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                DjCrossfadeSettingsSection(viewModel = viewModel)
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = TealPrimary)
+                ) {
+                    Text("Done", color = OnTeal, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
