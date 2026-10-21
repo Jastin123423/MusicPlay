@@ -17,12 +17,20 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.data.MusicTrack
 import com.example.ui.MusicMainScreen
 import com.example.ui.MusicViewModel
+import com.example.ui.localization.LocalAppLanguage
+import com.example.ui.localization.LocalAppStrings
+import com.example.ui.localization.getAppStrings
 import com.example.ui.theme.MyApplicationTheme
 import com.google.android.gms.ads.MobileAds
 
@@ -57,12 +65,21 @@ class MainActivity : ComponentActivity() {
         handleIncomingAudioIntent(intent)
 
         setContent {
-            MyApplicationTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    MusicMainScreen(
-                        viewModel = viewModel,
-                        modifier = Modifier.padding(innerPadding)
-                    )
+            val currentLanguage by viewModel.currentLanguage.collectAsState()
+            val currentStrings = remember(currentLanguage) { getAppStrings(currentLanguage) }
+
+            CompositionLocalProvider(
+                LocalAppLanguage provides currentLanguage,
+                LocalAppStrings provides currentStrings,
+                LocalLayoutDirection provides currentLanguage.layoutDirection
+            ) {
+                MyApplicationTheme {
+                    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                        MusicMainScreen(
+                            viewModel = viewModel,
+                            modifier = Modifier.padding(innerPadding)
+                        )
+                    }
                 }
             }
         }

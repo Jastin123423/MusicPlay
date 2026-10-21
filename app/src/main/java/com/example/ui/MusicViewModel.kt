@@ -1,6 +1,7 @@
 package com.example.ui
 
 import android.app.Application
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -10,15 +11,29 @@ import com.example.data.MusicRepository
 import com.example.data.MusicTrack
 import com.example.data.PlaybackQueue
 import com.example.data.Playlist
+import com.example.ui.localization.AppLanguage
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
+    private val prefs = application.getSharedPreferences("musicplay_prefs", Context.MODE_PRIVATE)
+
     private val db = MusicDatabase.getDatabase(application)
     private val repository = MusicRepository(db.musicDao())
 
     val playbackManager = MusicPlaybackManager.getInstance()
+
+    // Language state with persistence
+    private val _currentLanguage = MutableStateFlow(
+        AppLanguage.fromCode(prefs.getString("app_language", AppLanguage.ENGLISH.code))
+    )
+    val currentLanguage: StateFlow<AppLanguage> = _currentLanguage.asStateFlow()
+
+    fun setLanguage(language: AppLanguage) {
+        _currentLanguage.value = language
+        prefs.edit().putString("app_language", language.code).apply()
+    }
 
     // Observable states from DB
     val allTracks: StateFlow<List<MusicTrack>> = repository.allTracks

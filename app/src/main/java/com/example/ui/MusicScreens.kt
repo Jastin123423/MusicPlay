@@ -61,10 +61,147 @@ import com.example.audio.RepeatMode
 import com.example.data.MusicTrack
 import com.example.data.PlaybackQueue
 import com.example.data.Playlist
+import com.example.ui.localization.AppLanguage
+import com.example.ui.localization.LocalAppLanguage
+import com.example.ui.localization.LocalAppStrings
 import com.example.ui.theme.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+@Composable
+fun LanguageSelectionDialog(
+    currentLanguage: AppLanguage,
+    onLanguageSelected: (AppLanguage) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val strings = LocalAppStrings.current
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = SpaceCardBg),
+            border = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.35f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(TealPrimary.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Translate,
+                            contentDescription = null,
+                            tint = TealPrimary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = strings.selectLanguage,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = TextLight
+                        )
+                        Text(
+                            text = strings.selectLanguageSubtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextMuted
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                AppLanguage.entries.forEach { lang ->
+                    val isSelected = lang == currentLanguage
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable {
+                                onLanguageSelected(lang)
+                                onDismiss()
+                            },
+                        color = if (isSelected) TealPrimary.copy(alpha = 0.18f) else SpacePlayerBg,
+                        border = if (isSelected) BorderStroke(1.5.dp, TealPrimary) else null,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = lang.flag,
+                                    fontSize = 22.sp
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = lang.nativeName,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSelected) TealPrimary else TextLight
+                                    )
+                                    Text(
+                                        text = lang.displayName,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = TextMuted
+                                    )
+                                }
+                            }
+                            if (isSelected) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .background(TealPrimary),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Check,
+                                        contentDescription = "Selected",
+                                        tint = OnTeal,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text(text = strings.close, color = TealPrimary, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 fun TrackAlbumArt(
@@ -149,6 +286,7 @@ fun TrackAlbumArt(
 fun EmptyMusicStateCard(
     onScanClick: () -> Unit
 ) {
+    val strings = LocalAppStrings.current
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -182,7 +320,7 @@ fun EmptyMusicStateCard(
                 }
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    text = "No Phone Music Found",
+                    text = strings.emptyStorageTitle,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = TextLight,
@@ -190,7 +328,7 @@ fun EmptyMusicStateCard(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Grant storage permission and scan your device to read local MP3, M4A, FLAC, and WAV audio files.",
+                    text = strings.emptyStorageSubtitle,
                     style = MaterialTheme.typography.bodyMedium,
                     color = TextMuted,
                     textAlign = TextAlign.Center
@@ -209,7 +347,7 @@ fun EmptyMusicStateCard(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Scan Phone Storage",
+                        text = strings.scanPhoneStorage,
                         style = TextStyle(fontWeight = FontWeight.Bold)
                     )
                 }
@@ -222,6 +360,7 @@ fun EmptyMusicStateCard(
 fun MusicMainScreen(viewModel: MusicViewModel, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val strings = LocalAppStrings.current
     val currentTab by viewModel.currentTab.collectAsState()
     val tracks by viewModel.allTracks.collectAsState()
     val playlists by viewModel.allPlaylists.collectAsState()
@@ -259,6 +398,7 @@ fun MusicMainScreen(viewModel: MusicViewModel, modifier: Modifier = Modifier) {
 
     var showFullPlayer by remember { mutableStateOf(false) }
     var showTopDjDialog by remember { mutableStateOf(false) }
+    var showLanguageDialog by remember { mutableStateOf(false) }
     val crossfadeEnabled by viewModel.playbackManager.crossfadeEnabled.collectAsState()
     val crossfadeSec by viewModel.playbackManager.crossfadeSec.collectAsState()
     var trackForOptions by remember { mutableStateOf<MusicTrack?>(null) }
@@ -301,14 +441,14 @@ fun MusicMainScreen(viewModel: MusicViewModel, modifier: Modifier = Modifier) {
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
                             Text(
-                                text = "MUSICPLAY",
+                                text = strings.appName,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary,
                                 letterSpacing = 2.sp
                             )
                             Text(
-                                text = "Offline Pro • Clean Experience",
+                                text = strings.appTagline,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextMuted
                             )
@@ -316,6 +456,19 @@ fun MusicMainScreen(viewModel: MusicViewModel, modifier: Modifier = Modifier) {
                     }
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Language switching icon IMMEDIATELY BEFORE the refresh icon!
+                        IconButton(
+                            onClick = { showLanguageDialog = true },
+                            modifier = Modifier.testTag("language_switch_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Language,
+                                contentDescription = strings.switchLanguage,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        // Refresh / Media Scan icon
                         IconButton(
                             onClick = {
                                 if (ContextCompat.checkSelfPermission(context, permissionToRequest) == PackageManager.PERMISSION_GRANTED) {
@@ -334,7 +487,7 @@ fun MusicMainScreen(viewModel: MusicViewModel, modifier: Modifier = Modifier) {
                             } else {
                                 Icon(
                                     imageVector = Icons.Filled.Sync,
-                                    contentDescription = "Scan Media",
+                                    contentDescription = strings.scanMedia,
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             }
@@ -347,7 +500,7 @@ fun MusicMainScreen(viewModel: MusicViewModel, modifier: Modifier = Modifier) {
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.AutoAwesome,
-                                contentDescription = "DJ Crossfade Settings",
+                                contentDescription = strings.djSettings,
                                 tint = if (crossfadeEnabled && crossfadeSec > 0) MaterialTheme.colorScheme.primary else TextMuted
                             )
                         }
@@ -385,7 +538,7 @@ fun MusicMainScreen(viewModel: MusicViewModel, modifier: Modifier = Modifier) {
                             modifier = Modifier.background(SpaceCardBg)
                         ) {
                             Text(
-                                text = "Switch Playback Queue",
+                                text = strings.switchQueue,
                                 style = MaterialTheme.typography.labelSmall,
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                                 color = TextMuted
@@ -403,7 +556,7 @@ fun MusicMainScreen(viewModel: MusicViewModel, modifier: Modifier = Modifier) {
                                             )
                                             val size = if (q.trackIdsString.isEmpty()) 0 else q.trackIdsString.split(",").size
                                             Text(
-                                                text = "$size songs",
+                                                text = "$size ${strings.songsCount}",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = TextMuted
                                             )
@@ -421,7 +574,7 @@ fun MusicMainScreen(viewModel: MusicViewModel, modifier: Modifier = Modifier) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(Icons.Filled.Add, "add", tint = TealPrimary, modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text("Create New Queue", color = TealPrimary)
+                                        Text(strings.createNewQueue, color = TealPrimary)
                                     }
                                 },
                                 onClick = {
@@ -452,12 +605,21 @@ fun MusicMainScreen(viewModel: MusicViewModel, modifier: Modifier = Modifier) {
                 ) {
                     val tabs = listOf("Queue", "Folders", "Songs", "Albums", "Artists", "Playlists")
                     tabs.forEach { tab ->
+                        val tabTitle = when (tab) {
+                            "Queue" -> strings.tabQueue
+                            "Folders" -> strings.tabFolders
+                            "Songs" -> strings.tabSongs
+                            "Albums" -> strings.tabAlbums
+                            "Artists" -> strings.tabArtists
+                            "Playlists" -> strings.tabPlaylists
+                            else -> tab
+                        }
                         Tab(
                             selected = currentTab == tab,
                             onClick = { viewModel.setTab(tab) },
                             text = {
                                 Text(
-                                    text = tab,
+                                    text = tabTitle,
                                     fontWeight = if (currentTab == tab) FontWeight.Bold else FontWeight.Medium,
                                     color = if (currentTab == tab) MaterialTheme.colorScheme.primary else TextMuted
                                 )
@@ -633,6 +795,18 @@ fun MusicMainScreen(viewModel: MusicViewModel, modifier: Modifier = Modifier) {
                 }
             }
         }
+    }
+
+    // Modal Language Selection Dialog
+    if (showLanguageDialog) {
+        val currentLang by viewModel.currentLanguage.collectAsState()
+        LanguageSelectionDialog(
+            currentLanguage = currentLang,
+            onLanguageSelected = { newLang ->
+                viewModel.setLanguage(newLang)
+            },
+            onDismiss = { showLanguageDialog = false }
+        )
     }
 
     // Modal DJ Crossfade Settings Dialog
@@ -827,6 +1001,7 @@ fun ActiveQueueScreen(
 ) {
     val currentQueueTracks by viewModel.queueTracks.collectAsState()
     val activeTrack by viewModel.playbackManager.currentTrack.collectAsState()
+    val strings = LocalAppStrings.current
 
     Column(modifier = Modifier.fillMaxSize()) {
         Card(
@@ -846,13 +1021,13 @@ fun ActiveQueueScreen(
                 Column {
                     val qName = idQueues.find { it.queueId == selectedQueueId }?.name ?: "Queue"
                     Text(
-                        text = "Current: $qName",
+                        text = "${strings.activeQueue}: $qName",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = TealPrimary
                     )
                     Text(
-                        text = "${currentQueueTracks.size} songs connected",
+                        text = "${currentQueueTracks.size} ${strings.songsCount}",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextMuted
                     )
@@ -863,7 +1038,7 @@ fun ActiveQueueScreen(
                         onClick = { viewModel.clearActiveQueue() },
                         colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.error)
                     ) {
-                        Icon(imageVector = Icons.Filled.Delete, contentDescription = "Clear Queue")
+                        Icon(imageVector = Icons.Filled.Delete, contentDescription = strings.clearQueue)
                     }
                 }
             }
@@ -885,12 +1060,12 @@ fun ActiveQueueScreen(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "This queue is empty",
+                        text = strings.emptyQueueTitle,
                         color = TextMuted,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Go to Songs or Albums to add elements!",
+                        text = strings.emptyQueueSubtitle,
                         color = TextMuted.copy(alpha = 0.7f),
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(top = 4.dp)
@@ -995,6 +1170,7 @@ fun SongsListScreen(
     onTrackClicked: (MusicTrack) -> Unit,
     onMoreClicked: (MusicTrack) -> Unit
 ) {
+    val strings = LocalAppStrings.current
     var searchQuery by remember { mutableStateOf("") }
     val filteredTracks = tracks.filter {
         it.title.contains(searchQuery, ignoreCase = true) ||
@@ -1014,7 +1190,7 @@ fun SongsListScreen(
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
-            placeholder = { Text("Search songs, artists, albums...", color = TextMuted) },
+            placeholder = { Text(strings.searchPlaceholder, color = TextMuted) },
             leadingIcon = { Icon(Icons.Filled.Search, "search", tint = TextMuted) },
             trailingIcon = {
                 if (searchQuery.isNotEmpty()) {
@@ -1718,6 +1894,7 @@ fun PlaylistsScreen(
     onPlayTrack: (MusicTrack, List<MusicTrack>) -> Unit
 ) {
     val context = LocalContext.current
+    val strings = LocalAppStrings.current
 
     LazyColumn(
         modifier = Modifier
@@ -1733,19 +1910,19 @@ fun PlaylistsScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "My Custom Playlists",
+                    text = strings.tabPlaylists,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = TealPrimary
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
-                        onClick = { shareMusicPlayApp(context) },
+                        onClick = { shareMusicPlayApp(context, strings.linkCopiedToast) },
                         modifier = Modifier.testTag("playlists_header_share_button")
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Share,
-                            contentDescription = "Share App",
+                            contentDescription = strings.shareAppTitle,
                             tint = TealPrimary
                         )
                     }
@@ -1755,9 +1932,9 @@ fun PlaylistsScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = TealPrimary),
                         modifier = Modifier.testTag("create_playlist_button")
                     ) {
-                        Icon(Icons.Filled.Add, contentDescription = "Create Playlist", tint = OnTeal)
+                        Icon(Icons.Filled.Add, contentDescription = strings.createPlaylist, tint = OnTeal)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("New", color = OnTeal)
+                        Text(strings.newPlaylist, color = OnTeal)
                     }
                 }
             }
@@ -1785,14 +1962,14 @@ fun PlaylistsScreen(
                         )
                         Spacer(modifier = Modifier.height(10.dp))
                         Text(
-                            text = "No custom playlists yet",
+                            text = strings.noPlaylistsFound,
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                             color = TextLight
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Tap '+ New' to create your first music playlist!",
+                            text = strings.emptyStorageSubtitle,
                             style = MaterialTheme.typography.bodySmall,
                             color = TextMuted,
                             textAlign = TextAlign.Center
@@ -2542,6 +2719,7 @@ fun TrackOptionsDialog(
     onAddToPlaylist: () -> Unit,
     onToggleFavorite: () -> Unit
 ) {
+    val strings = LocalAppStrings.current
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = SpaceCardBg,
@@ -2561,7 +2739,7 @@ fun TrackOptionsDialog(
                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Icon(imageVector = Icons.Filled.Favorite, contentDescription = "Fav", tint = TealPrimary)
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text(if (track.isFavorite) "Remove from Favorites" else "Add to Favorites", color = TextLight)
+                        Text(if (track.isFavorite) "${strings.delete}: ${strings.favorites}" else strings.favorites, color = TextLight)
                     }
                 }
                 TextButton(
@@ -2571,7 +2749,7 @@ fun TrackOptionsDialog(
                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Icon(imageVector = Icons.Filled.PlaylistAdd, contentDescription = "Add Playlist", tint = TealPrimary)
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text("Add to Custom Playlist", color = TextLight)
+                        Text(strings.addToPlaylist, color = TextLight)
                     }
                 }
                 TextButton(
@@ -2581,7 +2759,7 @@ fun TrackOptionsDialog(
                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Icon(imageVector = Icons.Filled.Edit, contentDescription = "Edit Tags", tint = TealPrimary)
                         Spacer(modifier = Modifier.width(12.dp))
-                        Text("Edit ID3 Metadata & Lyrics", color = TextLight)
+                        Text(strings.editTags, color = TextLight)
                     }
                 }
                 TextButton(
@@ -2590,7 +2768,7 @@ fun TrackOptionsDialog(
                 ) {
                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Spacer(modifier = Modifier.width(36.dp))
-                        Text("Close Options", color = TextMuted)
+                        Text(strings.close, color = TextMuted)
                     }
                 }
             }
@@ -2606,13 +2784,14 @@ fun AddToPlaylistDialog(
     onDismiss: () -> Unit,
     onSelect: (Int) -> Unit
 ) {
+    val strings = LocalAppStrings.current
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = SpaceCardBg,
-        title = { Text("Select Target Playlist", color = TextLight) },
+        title = { Text(strings.addToPlaylist, color = TextLight) },
         text = {
             if (playlists.isEmpty()) {
-                Text("You don't have any playlists yet. Return to Playlists tab and create one first!", color = TextMuted)
+                Text(strings.noPlaylistsFound, color = TextMuted)
             } else {
                 LazyColumn {
                     items(playlists) { playlist ->
@@ -2633,7 +2812,7 @@ fun AddToPlaylistDialog(
         },
         confirmButton = {},
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel", color = TextMuted) }
+            TextButton(onClick = onDismiss) { Text(strings.cancel, color = TextMuted) }
         }
     )
 }
@@ -2645,6 +2824,7 @@ fun TagEditorDialog(
     onDismiss: () -> Unit,
     onSave: (Map<String, String>) -> Unit
 ) {
+    val strings = LocalAppStrings.current
     var title by remember { mutableStateOf(track.title) }
     var artist by remember { mutableStateOf(track.artist) }
     var album by remember { mutableStateOf(track.album) }
@@ -2666,7 +2846,7 @@ fun TagEditorDialog(
                     .padding(16.dp)
             ) {
                 Text(
-                    text = "ID3 Editor (Musicolet style)",
+                    text = strings.editTags,
                     fontWeight = FontWeight.Bold,
                     color = TealPrimary,
                     style = MaterialTheme.typography.titleMedium,
@@ -2676,7 +2856,7 @@ fun TagEditorDialog(
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
-                    label = { Text("Track Title") },
+                    label = { Text(strings.titleLabel) },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = TealPrimary, unfocusedBorderColor = TextMuted, focusedTextColor = TextLight, unfocusedTextColor = TextLight
                     ),
@@ -2686,7 +2866,7 @@ fun TagEditorDialog(
                 OutlinedTextField(
                     value = artist,
                     onValueChange = { artist = it },
-                    label = { Text("Lead Artist") },
+                    label = { Text(strings.artistLabel) },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = TealPrimary, unfocusedBorderColor = TextMuted, focusedTextColor = TextLight, unfocusedTextColor = TextLight
                     ),
@@ -2696,7 +2876,7 @@ fun TagEditorDialog(
                 OutlinedTextField(
                     value = album,
                     onValueChange = { album = it },
-                    label = { Text("Album Title") },
+                    label = { Text(strings.albumLabel) },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = TealPrimary, unfocusedBorderColor = TextMuted, focusedTextColor = TextLight, unfocusedTextColor = TextLight
                     ),
@@ -2707,7 +2887,7 @@ fun TagEditorDialog(
                     OutlinedTextField(
                         value = genre,
                         onValueChange = { genre = it },
-                        label = { Text("Genre") },
+                        label = { Text(strings.genreLabel) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = TealPrimary, unfocusedBorderColor = TextMuted, focusedTextColor = TextLight, unfocusedTextColor = TextLight
                         ),
@@ -2716,7 +2896,7 @@ fun TagEditorDialog(
                     OutlinedTextField(
                         value = year,
                         onValueChange = { year = it },
-                        label = { Text("Year") },
+                        label = { Text(strings.yearLabel) },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = TealPrimary, unfocusedBorderColor = TextMuted, focusedTextColor = TextLight, unfocusedTextColor = TextLight
                         ),
@@ -2727,7 +2907,7 @@ fun TagEditorDialog(
                 OutlinedTextField(
                     value = trackNumber,
                     onValueChange = { trackNumber = it },
-                    label = { Text("Track Index Number") },
+                    label = { Text("No.") },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = TealPrimary, unfocusedBorderColor = TextMuted, focusedTextColor = TextLight, unfocusedTextColor = TextLight
                     ),
@@ -2737,7 +2917,7 @@ fun TagEditorDialog(
                 OutlinedTextField(
                     value = lyrics,
                     onValueChange = { lyrics = it },
-                    label = { Text("Lyrics Text Block") },
+                    label = { Text(strings.lyricsLabel) },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = TealPrimary, unfocusedBorderColor = TextMuted, focusedTextColor = TextLight, unfocusedTextColor = TextLight
                     ),
@@ -2750,7 +2930,7 @@ fun TagEditorDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
-                    TextButton(onClick = onDismiss) { Text("Cancel", color = TextMuted) }
+                    TextButton(onClick = onDismiss) { Text(strings.cancel, color = TextMuted) }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = {
@@ -2767,7 +2947,7 @@ fun TagEditorDialog(
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = TealPrimary)
                     ) {
-                        Text("Save Tags", color = OnTeal)
+                        Text(strings.saveChanges, color = OnTeal)
                     }
                 }
             }
@@ -3133,6 +3313,7 @@ fun DjCrossfadeDialog(
     viewModel: MusicViewModel,
     onDismiss: () -> Unit
 ) {
+    val strings = LocalAppStrings.current
     Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = Modifier
@@ -3169,14 +3350,14 @@ fun DjCrossfadeDialog(
                         }
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = "DJ Crossfade Settings",
+                            text = strings.djCrossfadeTitle,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = TextLight
                         )
                     }
                     IconButton(onClick = onDismiss) {
-                        Icon(imageVector = Icons.Filled.Close, contentDescription = "Close", tint = TextLight)
+                        Icon(imageVector = Icons.Filled.Close, contentDescription = strings.close, tint = TextLight)
                     }
                 }
 
@@ -3191,7 +3372,7 @@ fun DjCrossfadeDialog(
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = TealPrimary)
                 ) {
-                    Text("Done", color = OnTeal, fontWeight = FontWeight.Bold)
+                    Text(strings.close, color = OnTeal, fontWeight = FontWeight.Bold)
                 }
             }
         }

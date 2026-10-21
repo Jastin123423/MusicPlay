@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">MusicPlay</string>
+    <string name="share_app_title">Partager MusicPlay</string>
+    <string name="share_app_subtitle">Invitez vos proches à profiter d\'un lecteur de musique hors ligne puissant</string>
+    <string name="share_app_copy_link">Copier et partager le lien de l\'appli</string>
+    <string name="recommended_app_badge">APPLICATION RECOMMANDÉE</string>
+    <string name="jobs_report_app_name">JobsReport</string>
+    <string name="jobs_report_tagline">Recherche d\'emploi et carrière • Gratuit</string>
+    <string name="jobs_report_description">Recrutez et trouvez diverses opportunités d\'emploi gratuitement via l\'application JobsReport</string>
+    <string name="install_button">Installer</string>
+</resources>

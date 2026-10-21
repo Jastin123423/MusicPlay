@@ -29,11 +29,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.R
+import com.example.ui.localization.LocalAppStrings
 import com.example.ui.theme.*
 
 const val MUSIC_PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=co.musicplay.ap"
@@ -42,18 +41,18 @@ const val JOBS_REPORT_STORE_URL = "https://play.google.com/store/apps/details?id
 /**
  * Copies the MusicPlay link to clipboard and opens the share sheet.
  */
-fun shareMusicPlayApp(context: Context) {
+fun shareMusicPlayApp(context: Context, toastMsg: String = "Link copied to clipboard!") {
     try {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
         val clip = ClipData.newPlainText("MusicPlay Link", MUSIC_PLAY_STORE_URL)
         clipboard?.setPrimaryClip(clip)
-        Toast.makeText(context, "Link copied to clipboard!\n$MUSIC_PLAY_STORE_URL", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "$toastMsg\n$MUSIC_PLAY_STORE_URL", Toast.LENGTH_SHORT).show()
     } catch (_: Exception) {}
 
     try {
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
-            putExtra(Intent.EXTRA_SUBJECT, "MusicPlay - Best Offline Music Player")
+            putExtra(Intent.EXTRA_SUBJECT, "MusicPlay - Offline Music Player")
             putExtra(Intent.EXTRA_TEXT, MUSIC_PLAY_STORE_URL)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
@@ -86,12 +85,13 @@ fun ShareAppCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val strings = LocalAppStrings.current
 
     Card(
         modifier = modifier
             .fillMaxWidth()
             .testTag("share_app_card")
-            .clickable { shareMusicPlayApp(context) },
+            .clickable { shareMusicPlayApp(context, strings.linkCopiedToast) },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = SpaceCardBg),
         border = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.35f))
@@ -119,7 +119,7 @@ fun ShareAppCard(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Share,
-                        contentDescription = "Share App",
+                        contentDescription = strings.shareAppTitle,
                         tint = Color.White,
                         modifier = Modifier.size(24.dp)
                     )
@@ -130,7 +130,7 @@ fun ShareAppCard(
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = stringResource(R.string.share_app_title),
+                            text = strings.shareAppTitle,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = TextLight
@@ -141,7 +141,7 @@ fun ShareAppCard(
                             color = TealPrimary.copy(alpha = 0.2f)
                         ) {
                             Text(
-                                text = "OFFLINE PLAYER",
+                                text = strings.offlinePlayerBadge,
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = TealPrimary,
@@ -151,7 +151,7 @@ fun ShareAppCard(
                     }
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = stringResource(R.string.share_app_subtitle),
+                        text = strings.shareAppSubtitle,
                         style = MaterialTheme.typography.bodySmall,
                         color = TextMuted,
                         lineHeight = 16.sp
@@ -163,7 +163,7 @@ fun ShareAppCard(
 
             // Action row with copy link button
             Button(
-                onClick = { shareMusicPlayApp(context) },
+                onClick = { shareMusicPlayApp(context, strings.linkCopiedToast) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("share_app_button"),
@@ -181,7 +181,7 @@ fun ShareAppCard(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = stringResource(R.string.share_app_copy_link),
+                    text = strings.copyShareLink,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp
                 )
@@ -198,6 +198,7 @@ fun RecommendedJobsReportCard(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val strings = LocalAppStrings.current
 
     Card(
         modifier = modifier
@@ -234,7 +235,7 @@ fun RecommendedJobsReportCard(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = stringResource(R.string.recommended_app_badge),
+                            text = strings.recommendedAppBadge,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFFA5B4FC),
@@ -293,7 +294,7 @@ fun RecommendedJobsReportCard(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = stringResource(R.string.jobs_report_app_name),
+                        text = strings.jobsReportAppName,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = TextLight,
@@ -301,7 +302,7 @@ fun RecommendedJobsReportCard(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = stringResource(R.string.jobs_report_tagline),
+                        text = strings.jobsReportTagline,
                         style = MaterialTheme.typography.bodySmall,
                         color = Color(0xFFA5B4FC),
                         fontWeight = FontWeight.Medium
@@ -313,7 +314,7 @@ fun RecommendedJobsReportCard(
 
             // Description required: "Hire, find various Jobs opportunities for free via JobsReport App"
             Text(
-                text = stringResource(R.string.jobs_report_description),
+                text = strings.jobsReportDescription,
                 style = MaterialTheme.typography.bodyMedium,
                 color = TextLight.copy(alpha = 0.92f),
                 lineHeight = 20.sp
@@ -342,7 +343,7 @@ fun RecommendedJobsReportCard(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = stringResource(R.string.install_button),
+                    text = strings.installButton,
                     fontWeight = FontWeight.Bold,
                     fontSize = 15.sp,
                     color = Color.White
