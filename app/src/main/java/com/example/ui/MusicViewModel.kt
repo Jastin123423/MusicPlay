@@ -48,13 +48,18 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         playbackManager.setContext(application)
         viewModelScope.launch {
             try {
-                _isScanning.value = true
-                repository.scanDeviceAudioFiles(application)
+                repository.cleanFakeAndDuplicateTracks()
                 loadQueue(selectedQueueId.value)
+                val hasPermission = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    androidx.core.content.ContextCompat.checkSelfPermission(application, android.Manifest.permission.READ_MEDIA_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                } else {
+                    androidx.core.content.ContextCompat.checkSelfPermission(application, android.Manifest.permission.READ_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                }
+                if (hasPermission) {
+                    scanLocalMusic(application)
+                }
             } catch (e: Exception) {
                 Log.e("MusicViewModel", "Error initializing local music: ${e.message}")
-            } finally {
-                _isScanning.value = false
             }
         }
         
@@ -280,6 +285,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun scanLocalMusic(context: android.content.Context) {
+        if (_isScanning.value) return
         viewModelScope.launch {
             _isScanning.value = true
             try {

@@ -14,8 +14,8 @@ android {
     applicationId = "co.musicplay.ap"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = 2
+    versionName = "2.00"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

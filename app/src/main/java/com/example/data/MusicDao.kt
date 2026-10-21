@@ -27,6 +27,12 @@ interface MusicDao {
     @Query("DELETE FROM music_tracks")
     suspend fun clearAllTracks()
 
+    @Query("SELECT * FROM music_tracks")
+    suspend fun getAllTracksList(): List<MusicTrack>
+
+    @Query("DELETE FROM music_tracks WHERE folder = 'Built-in DJ Library' OR contentUri = '' OR title IN ('Neon Skyline', 'Solar Horizon', 'Midnight Echoes', 'Cyber Lounge')")
+    suspend fun deleteFakeTracks()
+
     // Playback Queues (Musicolet Multi-Queues)
     @Query("SELECT * FROM playback_queues ORDER BY queueId ASC")
     fun getAllQueues(): Flow<List<PlaybackQueue>>

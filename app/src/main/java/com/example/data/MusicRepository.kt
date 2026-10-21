@@ -8,7 +8,12 @@ import android.util.Log
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
 class MusicRepository(private val musicDao: MusicDao) {
+
+    private val scanMutex = Mutex()
 
     val allTracks: Flow<List<MusicTrack>> = musicDao.getAllTracks()
     val allQueues: Flow<List<PlaybackQueue>> = musicDao.getAllQueues()
@@ -38,8 +43,39 @@ class MusicRepository(private val musicDao: MusicDao) {
 
     suspend fun deletePlaylist(playlist: Playlist) = musicDao.deletePlaylist(playlist)
 
-    suspend fun scanDeviceAudioFiles(context: Context): Int {
+    suspend fun cleanFakeAndDuplicateTracks() {
+        try {
+            musicDao.deleteFakeTracks()
+            val allDbTracks = musicDao.getAllTracksList()
+            val seenUris = mutableSetOf<String>()
+            val seenSignatures = mutableSetOf<String>()
+            val duplicates = mutableListOf<MusicTrack>()
+
+            for (track in allDbTracks) {
+                val uri = track.contentUri.trim()
+                val signature = "${track.title.trim().lowercase()}|${track.artist.trim().lowercase()}|${track.durationSec}|${track.album.trim().lowercase()}"
+                val isDuplicate = (uri.isNotBlank() && !seenUris.add(uri)) || !seenSignatures.add(signature)
+                if (isDuplicate) {
+                    duplicates.add(track)
+                }
+            }
+            for (dup in duplicates) {
+                musicDao.deleteTrack(dup)
+            }
+        } catch (e: Exception) {
+            Log.e("MusicRepository", "Error cleaning fake and duplicate tracks: ${e.message}")
+        }
+    }
+
+    suspend fun scanDeviceAudioFiles(context: Context): Int = scanMutex.withLock {
+        // Clean any residual fake songs or database duplicates first
+        cleanFakeAndDuplicateTracks()
+
         val audioList = mutableListOf<MusicTrack>()
+        val seenUris = mutableSetOf<String>()
+        val seenPaths = mutableSetOf<String>()
+        val seenSignatures = mutableSetOf<String>()
+
         val contentResolver = context.contentResolver
         val uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
 
@@ -78,20 +114,35 @@ class MusicRepository(private val musicDao: MusicDao) {
                     val rawArtist = cursor.getString(artistColumn) ?: "Unknown Artist"
                     val rawAlbum = cursor.getString(albumColumn) ?: "Unknown Album"
                     val durationMs = cursor.getLong(durationColumn)
-                    val durationSec = (durationMs / 1000).toInt().coerceAtLeast(1)
+                    val durationSec = (durationMs / 1000).toInt()
                     val filePath = cursor.getString(dataColumn) ?: ""
+
+                    // Ignore tiny audio files (less than 3 seconds) which are typically notification pings/chimes
+                    if (durationSec < 3) continue
+
+                    // Validate file path on disk if available to eliminate ghost / stale MediaStore rows
+                    if (filePath.isNotBlank()) {
+                        val file = java.io.File(filePath)
+                        if (!file.exists()) continue
+                        val canonical = try { file.canonicalPath } catch (_: Exception) { filePath }
+                        if (!seenPaths.add(canonical)) continue
+                    }
+
+                    val mediaUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, mediaId).toString()
+                    if (!seenUris.add(mediaUri)) continue
+
+                    val signature = "${rawTitle.trim().lowercase()}|${rawArtist.trim().lowercase()}|${durationSec}|${rawAlbum.trim().lowercase()}"
+                    if (!seenSignatures.add(signature)) continue
 
                     val albumId = if (albumIdColumn >= 0) cursor.getLong(albumIdColumn) else -1L
                     val albumArtUri = if (albumId > 0) ContentUris.withAppendedId(albumArtUriBase, albumId).toString() else ""
 
                     val folderName = if (filePath.isNotEmpty()) {
-                        java.io.File(filePath).parentFile?.name ?: "Internal Storage"
-                    } else "Internal Storage"
+                        java.io.File(filePath).parentFile?.name ?: "Music"
+                    } else "Music"
 
                     val year = if (yearColumn >= 0) (cursor.getString(yearColumn) ?: "") else ""
                     val trackNum = if (trackColumn >= 0) (cursor.getString(trackColumn) ?: "") else ""
-
-                    val mediaUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, mediaId).toString()
 
                     val track = MusicTrack(
                         title = if (rawTitle.isBlank() || rawTitle == "<unknown>") "Track $mediaId" else rawTitle,
@@ -100,7 +151,7 @@ class MusicRepository(private val musicDao: MusicDao) {
                         genre = "Local Audio",
                         year = year,
                         trackNumber = trackNum,
-                        durationSec = durationSec,
+                        durationSec = durationSec.coerceAtLeast(1),
                         lyrics = "",
                         folder = folderName,
                         contentUri = mediaUri,
@@ -115,87 +166,59 @@ class MusicRepository(private val musicDao: MusicDao) {
             Log.e("MusicRepository", "Error scanning media store: ${e.message}")
         }
 
-        // Wipe old tracks/demo data from DB and replace with real scanned phone music
-        musicDao.clearAllTracks()
-        if (audioList.isNotEmpty()) {
-            musicDao.insertTracks(audioList)
-
-            val newTracks = allTracks.first()
-            val newTrackIds = newTracks.map { it.id }
-
-            val currentQueues = allQueues.first()
-            if (currentQueues.isEmpty()) {
-                val q1Ids = newTrackIds.joinToString(",")
-                musicDao.insertQueue(PlaybackQueue(queueId = 1, name = "Primary Queue", trackIdsString = q1Ids, currentIndex = 0, currentPositionMs = 0L))
-                musicDao.insertQueue(PlaybackQueue(queueId = 2, name = "Favorites & Quick Queue", trackIdsString = "", currentIndex = 0, currentPositionMs = 0L))
-            } else {
-                val q1 = currentQueues.firstOrNull { it.queueId == 1 } ?: PlaybackQueue(queueId = 1, name = "Primary Queue", trackIdsString = "")
-                musicDao.insertQueue(q1.copy(trackIdsString = newTrackIds.joinToString(",")))
-            }
-        } else {
-            // Provide built-in demo tracks so the DJ crossfade is immediately testable and playable
-            val demoTracks = listOf(
-                MusicTrack(
-                    title = "Neon Skyline",
-                    artist = "Retro Synth Pro",
-                    album = "Club Odyssey",
-                    genre = "Synthwave",
-                    year = "2026",
-                    trackNumber = "1",
-                    durationSec = 25,
-                    lyrics = "Cruising down the electric neon highway...",
-                    folder = "Built-in DJ Library",
-                    bitrate = "320 kbps",
-                    sampleRate = "44.1 kHz"
-                ),
-                MusicTrack(
-                    title = "Solar Horizon",
-                    artist = "Pulse Masters",
-                    album = "Electric Dreams",
-                    genre = "Ambient",
-                    year = "2026",
-                    trackNumber = "2",
-                    durationSec = 22,
-                    lyrics = "Floating on cosmic waves of sound...",
-                    folder = "Built-in DJ Library",
-                    bitrate = "320 kbps",
-                    sampleRate = "44.1 kHz"
-                ),
-                MusicTrack(
-                    title = "Midnight Echoes",
-                    artist = "DJ Orbit",
-                    album = "Club Odyssey",
-                    genre = "Electronic",
-                    year = "2026",
-                    trackNumber = "3",
-                    durationSec = 28,
-                    lyrics = "Feel the rhythm in the digital pulse...",
-                    folder = "Built-in DJ Library",
-                    bitrate = "320 kbps",
-                    sampleRate = "44.1 kHz"
-                ),
-                MusicTrack(
-                    title = "Cyber Lounge",
-                    artist = "Echo Collective",
-                    album = "Electric Dreams",
-                    genre = "Synthwave",
-                    year = "2026",
-                    trackNumber = "4",
-                    durationSec = 24,
-                    lyrics = "Deep bass and glowing city lights...",
-                    folder = "Built-in DJ Library",
-                    bitrate = "320 kbps",
-                    sampleRate = "44.1 kHz"
-                )
-            )
-            musicDao.insertTracks(demoTracks)
-            val newTracks = allTracks.first()
-            val newTrackIds = newTracks.map { it.id }
-            val q1Ids = newTrackIds.joinToString(",")
-            musicDao.insertQueue(PlaybackQueue(queueId = 1, name = "Primary Queue", trackIdsString = q1Ids, currentIndex = 0, currentPositionMs = 0L))
-            musicDao.insertQueue(PlaybackQueue(queueId = 2, name = "Favorites & Quick Queue", trackIdsString = "", currentIndex = 0, currentPositionMs = 0L))
+        // Match with current database tracks to preserve stable IDs, favorites, and lyrics
+        val currentDbTracks = musicDao.getAllTracksList()
+        val dbByUri = currentDbTracks.filter { it.contentUri.isNotBlank() }.associateBy { it.contentUri }
+        val dbBySignature = currentDbTracks.associateBy {
+            "${it.title.trim().lowercase()}|${it.artist.trim().lowercase()}|${it.durationSec}|${it.album.trim().lowercase()}"
         }
 
-        return audioList.size
+        val finalTracksToSave = audioList.map { scannedTrack ->
+            val existing = dbByUri[scannedTrack.contentUri]
+                ?: dbBySignature["${scannedTrack.title.trim().lowercase()}|${scannedTrack.artist.trim().lowercase()}|${scannedTrack.durationSec}|${scannedTrack.album.trim().lowercase()}"]
+            if (existing != null) {
+                scannedTrack.copy(
+                    id = existing.id,
+                    isFavorite = existing.isFavorite,
+                    lyrics = if (scannedTrack.lyrics.isNotBlank()) scannedTrack.lyrics else existing.lyrics
+                )
+            } else {
+                scannedTrack
+            }
+        }
+
+        // Delete obsolete tracks that were removed from the device
+        val scannedUris = audioList.map { it.contentUri }.toSet()
+        val obsoleteTracks = currentDbTracks.filter { it.contentUri.isNotBlank() && it.contentUri !in scannedUris }
+        for (obsolete in obsoleteTracks) {
+            musicDao.deleteTrack(obsolete)
+        }
+
+        if (finalTracksToSave.isNotEmpty()) {
+            musicDao.insertTracks(finalTracksToSave)
+        } else {
+            // Keep library clean without fake songs if no local songs exist
+            musicDao.clearAllTracks()
+        }
+
+        // Synchronize queues with only existing valid track IDs
+        val savedTracks = musicDao.getAllTracksList()
+        val savedTrackIds = savedTracks.map { it.id }
+        val validIdSet = savedTrackIds.toSet()
+
+        val currentQueues = allQueues.first()
+        if (currentQueues.isEmpty()) {
+            val q1Ids = savedTrackIds.joinToString(",")
+            musicDao.insertQueue(PlaybackQueue(queueId = 1, name = "Primary Queue", trackIdsString = q1Ids, currentIndex = 0, currentPositionMs = 0L))
+            musicDao.insertQueue(PlaybackQueue(queueId = 2, name = "Favorites & Quick Queue", trackIdsString = "", currentIndex = 0, currentPositionMs = 0L))
+        } else {
+            val q1 = currentQueues.firstOrNull { it.queueId == 1 } ?: PlaybackQueue(queueId = 1, name = "Primary Queue", trackIdsString = "")
+            val currentQueueIds = q1.trackIdsString.split(",").filter { it.isNotEmpty() }.mapNotNull { it.toIntOrNull() }
+            val filteredQueueIds = currentQueueIds.filter { it in validIdSet }
+            val finalQueueIds = if (filteredQueueIds.isNotEmpty()) filteredQueueIds else savedTrackIds
+            musicDao.insertQueue(q1.copy(trackIdsString = finalQueueIds.joinToString(",")))
+        }
+
+        audioList.size
     }
 }
