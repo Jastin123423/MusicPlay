@@ -139,11 +139,11 @@ class MusicPlaybackManager {
     private val _isShuffle = MutableStateFlow(false)
     val isShuffle = _isShuffle.asStateFlow()
 
-    // Professional DJ Crossfade settings (Default 8 seconds per user requirement)
+    // Professional DJ Crossfade settings (Default 20 seconds per user requirement)
     private val _crossfadeEnabled = MutableStateFlow(true)
     val crossfadeEnabled = _crossfadeEnabled.asStateFlow()
 
-    private val _crossfadeSec = MutableStateFlow(8)
+    private val _crossfadeSec = MutableStateFlow(20)
     val crossfadeSec = _crossfadeSec.asStateFlow()
 
     private val _djModeEnabled = MutableStateFlow(true)
@@ -213,7 +213,14 @@ class MusicPlaybackManager {
     private fun loadPersistedSettings() {
         val prefs = sharedPrefs ?: return
         _crossfadeEnabled.value = prefs.getBoolean(KEY_CROSSFADE_ENABLED, true)
-        _crossfadeSec.value = prefs.getInt(KEY_CROSSFADE_SEC, 8).coerceIn(0, 20)
+        val defaultSec = 20
+        val savedSec = if (prefs.contains(KEY_CROSSFADE_SEC)) {
+            val v = prefs.getInt(KEY_CROSSFADE_SEC, defaultSec)
+            if (v == 8) defaultSec else v
+        } else {
+            defaultSec
+        }
+        _crossfadeSec.value = savedSec.coerceIn(0, 20)
         _djModeEnabled.value = prefs.getBoolean(KEY_DJ_MODE, true)
         _djCurveType.value = prefs.getString(KEY_DJ_CURVE, DjCurveType.EQUAL_POWER.name) ?: DjCurveType.EQUAL_POWER.name
     }

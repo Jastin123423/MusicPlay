@@ -3088,7 +3088,7 @@ fun DjCrossfadeSettingsSection(
                 onCheckedChange = { isChecked ->
                     viewModel.playbackManager.setCrossfadeEnabled(isChecked)
                     if (isChecked && crossfadeSec == 0) {
-                        viewModel.playbackManager.setCrossfadeSec(8)
+                        viewModel.playbackManager.setCrossfadeSec(20)
                     }
                 },
                 colors = SwitchDefaults.colors(
@@ -3122,7 +3122,7 @@ fun DjCrossfadeSettingsSection(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Preset Duration Chips: Off (0s), 3s, 5s, 8s (Default), 10s, 12s, 15s, 20s
+        // Preset Duration Chips: Off (0s), 3s, 5s, 8s, 10s, 12s, 15s, 20s (Default)
         val durationOptions = listOf(0, 3, 5, 8, 10, 12, 15, 20)
         Row(
             modifier = Modifier
@@ -3145,7 +3145,7 @@ fun DjCrossfadeSettingsSection(
                     },
                     label = {
                         Text(
-                            text = if (sec == 8) "$label (Default)" else label,
+                            text = if (sec == 20) "$label (Default)" else label,
                             style = TextStyle(fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
                         )
                     },
