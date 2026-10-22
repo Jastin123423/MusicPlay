@@ -6,6 +6,7 @@ import android.graphics.drawable.GradientDrawable
 import android.util.Log
 import android.view.Gravity
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -16,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,19 +28,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.example.R
+import com.example.data.MusicTrack
 import com.example.ui.theme.*
-import com.google.android.gms.ads.AdListener
-import com.google.android.gms.ads.AdLoader
-import com.google.android.gms.ads.AdRequest
-import com.google.android.gms.ads.LoadAdError
+import com.google.android.gms.ads.*
 import com.google.android.gms.ads.nativead.MediaView
 import com.google.android.gms.ads.nativead.NativeAd
-import com.example.data.MusicTrack
 import com.google.android.gms.ads.nativead.NativeAdOptions
 import com.google.android.gms.ads.nativead.NativeAdView
 import com.google.android.gms.ads.rewarded.RewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
-import com.google.android.gms.ads.FullScreenContentCallback
 
 /**
  * AdMob Configuration Constants
@@ -127,6 +126,161 @@ object CrossfadeRewardedAdManager {
 }
 
 /**
+ * Singleton manager to preload, maintain warm cache, and manage Native Advanced Ads
+ * across the 5 approved units without disappearing on screen changes.
+ */
+object AppNativeAdsManager {
+    private const val TAG = "AppNativeAds"
+
+    // Map from adUnitId to an observable list of loaded NativeAd objects
+    private val adsMap = mutableMapOf<String, SnapshotStateList<NativeAd>>()
+    private val loadingUnits = mutableSetOf<String>()
+
+    fun getLoadedAds(adUnitId: String): SnapshotStateList<NativeAd> {
+        return synchronized(this) {
+            adsMap.getOrPut(adUnitId) { mutableStateListOf() }
+        }
+    }
+
+    /**
+     * Preloads initial native ads across all 5 units on app startup.
+     */
+    fun preloadInitialAds(context: Context) {
+        val appContext = context.applicationContext
+        val allUnits = listOf(
+            NATIVE_AD_UNIT_1,
+            NATIVE_AD_UNIT_2,
+            NATIVE_AD_UNIT_3,
+            NATIVE_AD_UNIT_4,
+            NATIVE_AD_UNIT_5
+        )
+        for (unit in allUnits) {
+            requestAds(appContext, unit, targetCount = 2)
+        }
+    }
+
+    /**
+     * Requests native ads for an ad unit up to targetCount smoothly without burst flooding.
+     */
+    fun requestAds(context: Context, adUnitId: String, targetCount: Int = 1) {
+        val appContext = context.applicationContext
+        val list = getLoadedAds(adUnitId)
+        if (list.size >= targetCount) return
+        if (loadingUnits.contains(adUnitId)) return
+
+        loadingUnits.add(adUnitId)
+        loadNextAd(appContext, adUnitId, targetCount)
+    }
+
+    private fun loadNextAd(context: Context, adUnitId: String, targetCount: Int) {
+        val list = getLoadedAds(adUnitId)
+        if (list.size >= targetCount) {
+            loadingUnits.remove(adUnitId)
+            return
+        }
+
+        val adLoader = AdLoader.Builder(context, adUnitId)
+            .forNativeAd { nativeAd ->
+                list.add(nativeAd)
+                Log.d(TAG, "Native ad loaded for $adUnitId (pool size: ${list.size})")
+                if (list.size < targetCount) {
+                    loadNextAd(context, adUnitId, targetCount)
+                } else {
+                    loadingUnits.remove(adUnitId)
+                }
+            }
+            .withAdListener(object : AdListener() {
+                override fun onAdFailedToLoad(loadAdError: LoadAdError) {
+                    Log.w(TAG, "Native ad load failed for $adUnitId: ${loadAdError.message} (code ${loadAdError.code})")
+                    loadingUnits.remove(adUnitId)
+                    if (list.isEmpty()) {
+                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                            requestAds(context, adUnitId, targetCount)
+                        }, 5000L)
+                    }
+                }
+            })
+            .withNativeAdOptions(
+                NativeAdOptions.Builder()
+                    .setAdChoicesPlacement(NativeAdOptions.ADCHOICES_TOP_RIGHT)
+                    .setReturnUrlsForImageAssets(false)
+                    .build()
+            )
+            .build()
+
+        adLoader.loadAd(AdRequest.Builder().build())
+    }
+}
+
+/**
+ * Remembers and preloads AdMob Native Ads using the persistent AppNativeAdsManager.
+ * Retains loaded ads across navigation backstack so they never disappear.
+ */
+@Composable
+fun rememberNativeAds(
+    itemCount: Int,
+    adUnitId: String,
+    cadence: Int = 3
+): SnapshotStateList<NativeAd> {
+    val context = LocalContext.current
+    val loadedAds = remember(adUnitId) { AppNativeAdsManager.getLoadedAds(adUnitId) }
+    val neededCount = if (itemCount < cadence) 0 else (itemCount / cadence).coerceIn(1, 10)
+
+    LaunchedEffect(itemCount, adUnitId, neededCount) {
+        if (neededCount > 0) {
+            AppNativeAdsManager.requestAds(context, adUnitId, neededCount)
+        }
+    }
+    return loadedAds
+}
+
+/**
+ * State holder for backward-compatibility with screens referencing NativeAdsState.
+ */
+@Stable
+class NativeAdsState(val rawList: SnapshotStateList<NativeAd> = mutableStateListOf()) {
+    val failedAdIndices = mutableStateListOf<Int>()
+
+    val loadedAds: Map<Int, NativeAd> = object : AbstractMap<Int, NativeAd>() {
+        override val entries: Set<Map.Entry<Int, NativeAd>>
+            get() = rawList.mapIndexed { index, ad ->
+                java.util.AbstractMap.SimpleImmutableEntry(index, ad)
+            }.toSet()
+
+        override fun get(key: Int): NativeAd? {
+            if (rawList.isEmpty()) return null
+            return rawList.getOrNull(key) ?: rawList[key % rawList.size]
+        }
+
+        override fun containsKey(key: Int): Boolean = rawList.isNotEmpty()
+        override val size: Int get() = rawList.size
+        override fun isEmpty(): Boolean = rawList.isEmpty()
+    }
+}
+
+@Composable
+fun rememberNativeAdsState(
+    itemCount: Int,
+    adUnitId: String = ADMOB_NATIVE_AD_UNIT_ID
+): NativeAdsState {
+    val list = rememberNativeAds(itemCount = itemCount, adUnitId = adUnitId, cadence = 3)
+    return remember(list) {
+        NativeAdsState(rawList = list)
+    }
+}
+
+@Composable
+fun rememberSongNativeAdsState(
+    itemCount: Int,
+    adUnitId: String = ADMOB_SONGS_NATIVE_AD_UNIT_ID
+): NativeAdsState {
+    val list = rememberNativeAds(itemCount = itemCount, adUnitId = adUnitId, cadence = 10)
+    return remember(list) {
+        NativeAdsState(rawList = list)
+    }
+}
+
+/**
  * Sealed wrapper class to insert Native Ads into the Songs LazyColumn alongside real song tracks.
  */
 sealed class SongListItemWrapper {
@@ -143,74 +297,12 @@ sealed class GridItemWrapper<out T> {
 }
 
 /**
- * State holder for preloading and caching Native Ads.
- */
-@Stable
-class NativeAdsState {
-    val loadedAds = mutableStateMapOf<Int, NativeAd>()
-    val failedAdIndices = mutableStateListOf<Int>()
-}
-
-/**
- * Remembers and preloads AdMob Native Ads for Artist and Album grids.
- * Cadence rule: 1 ad after every 3 items (1, 2, 3, ad, 4, 5, 6, ad and more).
- */
-@Composable
-fun rememberNativeAdsState(
-    itemCount: Int,
-    adUnitId: String = ADMOB_NATIVE_AD_UNIT_ID
-): NativeAdsState {
-    val context = LocalContext.current
-    val state = remember { NativeAdsState() }
-
-    val requiredAdsCount = if (itemCount < 3) 0 else (itemCount / 3).coerceAtMost(20)
-
-    LaunchedEffect(itemCount, adUnitId) {
-        state.loadedAds.clear()
-        state.failedAdIndices.clear()
-
-        if (requiredAdsCount == 0) return@LaunchedEffect
-
-        for (i in 0 until requiredAdsCount) {
-            val adIndex = i
-            val adLoader = AdLoader.Builder(context, adUnitId)
-                .forNativeAd { nativeAd ->
-                    state.loadedAds[adIndex] = nativeAd
-                }
-                .withAdListener(object : AdListener() {
-                    override fun onAdFailedToLoad(loadAdError: LoadAdError) {
-                        Log.e("AdMobNative", "Grid Ad $adIndex failed to load: ${loadAdError.message}")
-                        state.failedAdIndices.add(adIndex)
-                    }
-                })
-                .withNativeAdOptions(
-                    NativeAdOptions.Builder()
-                        .setAdChoicesPlacement(NativeAdOptions.ADCHOICES_TOP_RIGHT)
-                        .build()
-                )
-                .build()
-
-            adLoader.loadAd(AdRequest.Builder().build())
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            state.loadedAds.values.forEach { it.destroy() }
-            state.loadedAds.clear()
-        }
-    }
-
-    return state
-}
-
-/**
  * Combines real list items with Native Ad items according to AdMob placement policies.
- * Requirement: In artist and album grids, show ad card as the third item: 1, 2, 3, ad, 4, 5, 6, ad and more.
+ * Cadence rule: 1 ad after every 3 items in albums and artists (1, 2, 3, ad, 4, 5, 6, ad and more).
  */
 fun <T> buildGridItemsWithAds(
     realItems: List<T>,
-    failedAdIndices: Collection<Int>
+    failedAdIndices: Collection<Int> = emptyList()
 ): List<GridItemWrapper<T>> {
     if (realItems.isEmpty()) return emptyList()
 
@@ -224,13 +316,9 @@ fun <T> buildGridItemsWithAds(
         result.add(GridItemWrapper.RealItem(realItems[i]))
         val itemNum = i + 1
 
-        // Insert Native Ad after every 3 real items (1, 2, 3, ad, 4, 5, 6, ad and more)
         if (itemNum % 3 == 0 && adsInserted < maxAdsAllowed) {
-            val currentAdIndex = adsInserted
+            result.add(GridItemWrapper.NativeAdItem(adsInserted))
             adsInserted++
-            if (!failedAdIndices.contains(currentAdIndex)) {
-                result.add(GridItemWrapper.NativeAdItem(currentAdIndex))
-            }
         }
     }
 
@@ -238,72 +326,13 @@ fun <T> buildGridItemsWithAds(
 }
 
 /**
- * Remembers and preloads AdMob Native Ads for Songs list.
- * Requirement:
- *   - If songs are below 10: 0 ads (don't show ad)
- *   - If songs >= 10: 1 ad for every 10 songs
- * Uses Approved Native Unit ID: ca-app-pub-8155064094205693/7166498907
- */
-@Composable
-fun rememberSongNativeAdsState(
-    itemCount: Int,
-    adUnitId: String = ADMOB_SONGS_NATIVE_AD_UNIT_ID
-): NativeAdsState {
-    val context = LocalContext.current
-    val state = remember { NativeAdsState() }
-
-    // If songs are below 10, don't load or show any ads.
-    // If 10 or more, load 1 ad after every 10 songs.
-    val requiredAdsCount = if (itemCount < 10) 0 else (itemCount / 10).coerceAtMost(25)
-
-    LaunchedEffect(itemCount, adUnitId) {
-        state.loadedAds.clear()
-        state.failedAdIndices.clear()
-
-        if (requiredAdsCount == 0) return@LaunchedEffect
-
-        for (i in 0 until requiredAdsCount) {
-            val adIndex = i
-            val adLoader = AdLoader.Builder(context, adUnitId)
-                .forNativeAd { nativeAd ->
-                    state.loadedAds[adIndex] = nativeAd
-                }
-                .withAdListener(object : AdListener() {
-                    override fun onAdFailedToLoad(loadAdError: LoadAdError) {
-                        Log.e("AdMobNative", "Song Native Ad $adIndex failed to load: ${loadAdError.message}")
-                        state.failedAdIndices.add(adIndex)
-                    }
-                })
-                .withNativeAdOptions(
-                    NativeAdOptions.Builder()
-                        .setAdChoicesPlacement(NativeAdOptions.ADCHOICES_TOP_RIGHT)
-                        .build()
-                )
-                .build()
-
-            adLoader.loadAd(AdRequest.Builder().build())
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            state.loadedAds.values.forEach { it.destroy() }
-            state.loadedAds.clear()
-        }
-    }
-
-    return state
-}
-
-/**
  * Combines real songs with Native Ads according to rules:
  * - If songs are below 10: do not show ad
  * - If songs >= 10: insert an ad after every 10 songs
- * - Automatically omit failed ads to preserve smooth listing
  */
 fun buildSongItemsWithAds(
     realItems: List<MusicTrack>,
-    failedAdIndices: Collection<Int>
+    failedAdIndices: Collection<Int> = emptyList()
 ): List<SongListItemWrapper> {
     if (realItems.size < 10) {
         return realItems.map { SongListItemWrapper.SongItem(it) }
@@ -316,13 +345,9 @@ fun buildSongItemsWithAds(
         result.add(SongListItemWrapper.SongItem(realItems[i]))
         val songNumber = i + 1
 
-        // Show ad after every 10 songs
         if (songNumber % 10 == 0) {
-            val currentAdIndex = adIndex
+            result.add(SongListItemWrapper.NativeAdItem(adIndex))
             adIndex++
-            if (!failedAdIndices.contains(currentAdIndex)) {
-                result.add(SongListItemWrapper.NativeAdItem(currentAdIndex))
-            }
         }
     }
 
@@ -330,8 +355,8 @@ fun buildSongItemsWithAds(
 }
 
 /**
- * Requirement 5 & 6 & 12: Album Card Native Ad layout matching exact size, shape, and style of Album cards.
- * Uses official Google NativeAdView wrapper and includes mandatory "Ad" / "Sponsored" badge.
+ * Album Card Native Ad layout matching exact size, shape, and style of Album cards.
+ * Uses official Google NativeAdView wrapper and includes mandatory "Ad" badge.
  */
 @Composable
 fun AlbumNativeAdCard(
@@ -344,7 +369,7 @@ fun AlbumNativeAdCard(
         shape = RoundedCornerShape(12.dp)
     ) {
         if (nativeAd == null) {
-            // Shimmer / Loading placeholder card of identical dimensions
+            // Sleek loading placeholder card of identical dimensions
             Column {
                 Box(
                     modifier = Modifier
@@ -390,7 +415,7 @@ fun AlbumNativeAdCard(
 }
 
 /**
- * Requirement 5 & 6 & 12: Artist Card Native Ad layout matching exact size, shape, and style of Artist cards.
+ * Artist Card Native Ad layout matching exact size, shape, and style of Artist cards.
  * Uses official Google NativeAdView wrapper with mandatory "Ad" badge.
  */
 @Composable
@@ -404,7 +429,6 @@ fun ArtistNativeAdCard(
         shape = RoundedCornerShape(12.dp)
     ) {
         if (nativeAd == null) {
-            // Loading placeholder of identical artist card dimensions
             Column(
                 modifier = Modifier.padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
@@ -463,7 +487,6 @@ fun SongNativeAdRow(
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         if (nativeAd == null) {
-            // Placeholder matching song row layout
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -518,10 +541,6 @@ fun SongNativeAdRow(
                 modifier = Modifier.fillMaxWidth()
             )
         }
-        HorizontalDivider(
-            color = SpaceCardBg.copy(alpha = 0.5f),
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
     }
 }
 
@@ -537,13 +556,39 @@ private fun createAlbumNativeAdView(context: Context, nativeAd: NativeAd): Nativ
         )
     }
 
-    // Media / Image container (130dp height matching album cover)
-    val mediaContainer = MediaView(context).apply {
+    // Top media container (130dp height matching album cover)
+    val mediaContainer = FrameLayout(context).apply {
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             (130 * context.resources.displayMetrics.density).toInt()
         )
+        clipToOutline = true
+        val cornerRadiusPx = 12 * context.resources.displayMetrics.density
+        outlineProvider = object : android.view.ViewOutlineProvider() {
+            override fun getOutline(view: android.view.View, outline: android.graphics.Outline) {
+                outline.setRoundRect(0, 0, view.width, view.height, cornerRadiusPx)
+            }
+        }
     }
+
+    val mediaView = MediaView(context).apply {
+        layoutParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        )
+    }
+
+    val fallbackImageView = ImageView(context).apply {
+        layoutParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        )
+        scaleType = ImageView.ScaleType.CENTER_CROP
+        visibility = android.view.View.GONE
+    }
+
+    mediaContainer.addView(mediaView)
+    mediaContainer.addView(fallbackImageView)
 
     // Details container (padding 12dp matching album details)
     val paddingPx = (12 * context.resources.displayMetrics.density).toInt()
@@ -627,10 +672,11 @@ private fun createAlbumNativeAdView(context: Context, nativeAd: NativeAd): Nativ
     nativeAdView.addView(rootLayout)
 
     // Register asset views with Google NativeAdView
-    nativeAdView.mediaView = mediaContainer
+    nativeAdView.mediaView = mediaView
     nativeAdView.headlineView = headlineView
     nativeAdView.bodyView = bodyView
     nativeAdView.callToActionView = ctaView
+    nativeAdView.imageView = fallbackImageView
 
     populateAlbumNativeAdView(nativeAdView, nativeAd)
     return nativeAdView
@@ -640,6 +686,24 @@ private fun populateAlbumNativeAdView(nativeAdView: NativeAdView, nativeAd: Nati
     (nativeAdView.headlineView as? TextView)?.text = nativeAd.headline
     (nativeAdView.bodyView as? TextView)?.text = nativeAd.body ?: nativeAd.advertiser ?: "Sponsored content"
     (nativeAdView.callToActionView as? TextView)?.text = nativeAd.callToAction ?: "Learn More"
+
+    // Set mediaContent so that MediaView renders the AdMob media asset
+    nativeAdView.mediaView?.mediaContent = nativeAd.mediaContent
+
+    val fallbackImageView = nativeAdView.imageView as? ImageView
+    val imageDrawable = nativeAd.images.firstOrNull()?.drawable ?: nativeAd.icon?.drawable
+    if (nativeAd.mediaContent == null || nativeAd.mediaContent?.aspectRatio == 0f) {
+        if (imageDrawable != null) {
+            fallbackImageView?.setImageDrawable(imageDrawable)
+            fallbackImageView?.visibility = android.view.View.VISIBLE
+        } else {
+            fallbackImageView?.setImageResource(R.drawable.img_app_icon)
+            fallbackImageView?.visibility = android.view.View.VISIBLE
+        }
+    } else {
+        fallbackImageView?.visibility = android.view.View.GONE
+    }
+
     nativeAdView.setNativeAd(nativeAd)
 }
 
@@ -664,11 +728,13 @@ private fun createArtistNativeAdView(context: Context, nativeAd: NativeAd): Nati
             bottomMargin = (8 * context.resources.displayMetrics.density).toInt()
         }
         scaleType = ImageView.ScaleType.CENTER_CROP
-        val clipDrawable = GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            setColor(android.graphics.Color.TRANSPARENT)
+        clipToOutline = true
+        val cornerRadiusPx = 36 * context.resources.displayMetrics.density
+        outlineProvider = object : android.view.ViewOutlineProvider() {
+            override fun getOutline(view: android.view.View, outline: android.graphics.Outline) {
+                outline.setRoundRect(0, 0, view.width, view.height, cornerRadiusPx)
+            }
         }
-        background = clipDrawable
     }
 
     // Ad Badge
@@ -738,11 +804,12 @@ private fun populateArtistNativeAdView(nativeAdView: NativeAdView, nativeAd: Nat
     (nativeAdView.headlineView as? TextView)?.text = nativeAd.headline
     (nativeAdView.callToActionView as? TextView)?.text = nativeAd.callToAction ?: nativeAd.advertiser ?: "Visit Site"
 
-    val icon = nativeAd.icon
-    if (icon != null && icon.drawable != null) {
-        (nativeAdView.iconView as? ImageView)?.setImageDrawable(icon.drawable)
+    val iconDrawable = nativeAd.icon?.drawable ?: nativeAd.images.firstOrNull()?.drawable
+    val imageView = nativeAdView.iconView as? ImageView
+    if (iconDrawable != null) {
+        imageView?.setImageDrawable(iconDrawable)
     } else {
-        (nativeAdView.iconView as? ImageView)?.setImageResource(com.example.R.drawable.img_default_album_art)
+        imageView?.setImageResource(R.drawable.img_app_icon)
     }
     nativeAdView.setNativeAd(nativeAd)
 }
@@ -763,7 +830,7 @@ private fun createSongNativeAdView(context: Context, nativeAd: NativeAd): Native
         )
     }
 
-    // 44dp x 44dp cover thumbnail with 8dp rounded corner matching real track album art
+    // 44dp x 44dp cover thumbnail with 8dp rounded corner
     val iconSizePx = (44 * density).toInt()
     val iconView = ImageView(context).apply {
         layoutParams = LinearLayout.LayoutParams(iconSizePx, iconSizePx)
@@ -887,16 +954,12 @@ private fun populateSongNativeAdView(nativeAdView: NativeAdView, nativeAd: Nativ
     (nativeAdView.bodyView as? TextView)?.text = nativeAd.advertiser ?: nativeAd.body ?: "Sponsored"
     (nativeAdView.callToActionView as? TextView)?.text = nativeAd.callToAction?.uppercase() ?: "OPEN"
 
-    val icon = nativeAd.icon
-    if (icon != null && icon.drawable != null) {
-        (nativeAdView.iconView as? ImageView)?.setImageDrawable(icon.drawable)
+    val iconDrawable = nativeAd.icon?.drawable ?: nativeAd.images.firstOrNull()?.drawable
+    val imageView = nativeAdView.iconView as? ImageView
+    if (iconDrawable != null) {
+        imageView?.setImageDrawable(iconDrawable)
     } else {
-        val image = nativeAd.images.firstOrNull()
-        if (image != null && image.drawable != null) {
-            (nativeAdView.iconView as? ImageView)?.setImageDrawable(image.drawable)
-        } else {
-            (nativeAdView.iconView as? ImageView)?.setImageResource(com.example.R.drawable.img_default_album_art)
-        }
+        imageView?.setImageResource(R.drawable.img_app_icon)
     }
     nativeAdView.setNativeAd(nativeAd)
 }
@@ -909,50 +972,20 @@ fun PlaylistNativeAdCard(
     modifier: Modifier = Modifier,
     adUnitId: String = NATIVE_AD_UNIT_5
 ) {
-    val context = LocalContext.current
-    var nativeAd by remember { mutableStateOf<NativeAd?>(null) }
-    var isFailed by remember { mutableStateOf(false) }
+    val loadedAds = rememberNativeAds(itemCount = 1, adUnitId = adUnitId, cadence = 1)
+    val nativeAd = loadedAds.firstOrNull()
 
-    LaunchedEffect(adUnitId) {
-        val adLoader = AdLoader.Builder(context, adUnitId)
-            .forNativeAd { ad ->
-                nativeAd = ad
-            }
-            .withAdListener(object : AdListener() {
-                override fun onAdFailedToLoad(loadAdError: LoadAdError) {
-                    Log.e("AdMobNative", "Playlist Native Ad failed to load: ${loadAdError.message}")
-                    isFailed = true
-                }
-            })
-            .withNativeAdOptions(
-                NativeAdOptions.Builder()
-                    .setAdChoicesPlacement(NativeAdOptions.ADCHOICES_TOP_RIGHT)
-                    .build()
-            )
-            .build()
-
-        adLoader.loadAd(AdRequest.Builder().build())
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            nativeAd?.destroy()
-        }
-    }
-
-    if (!isFailed) {
-        Card(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = SpaceCardBg),
-            border = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.25f))
-        ) {
-            SongNativeAdRow(
-                nativeAd = nativeAd,
-                modifier = Modifier.padding(vertical = 4.dp)
-            )
-        }
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = SpaceCardBg),
+        border = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.25f))
+    ) {
+        SongNativeAdRow(
+            nativeAd = nativeAd,
+            modifier = Modifier.padding(vertical = 4.dp)
+        )
     }
 }

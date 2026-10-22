@@ -31,6 +31,8 @@ import com.example.ui.MusicViewModel
 import com.example.ui.localization.LocalAppLanguage
 import com.example.ui.localization.LocalAppStrings
 import com.example.ui.localization.getAppStrings
+import com.example.ui.AppNativeAdsManager
+import com.example.ui.CrossfadeRewardedAdManager
 import com.example.ui.theme.MyApplicationTheme
 import com.google.android.gms.ads.MobileAds
 
@@ -42,8 +44,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        // Requirement 1: Initialize Google Mobile Ads SDK using App ID
-        MobileAds.initialize(this) {}
+        // Initialize Google Mobile Ads SDK using App ID and pre-warm native & rewarded ads
+        MobileAds.initialize(this) {
+            AppNativeAdsManager.preloadInitialAds(this)
+            CrossfadeRewardedAdManager.preload(this)
+        }
+        AppNativeAdsManager.preloadInitialAds(this)
+        CrossfadeRewardedAdManager.preload(this)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
