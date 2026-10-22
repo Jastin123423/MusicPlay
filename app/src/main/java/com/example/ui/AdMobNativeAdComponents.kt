@@ -43,11 +43,17 @@ import com.google.android.gms.ads.FullScreenContentCallback
 /**
  * AdMob Configuration Constants
  * Official App ID: ca-app-pub-8155064094205693~4470440036 (declared in AndroidManifest.xml)
- * Approved Native Advanced Ad Unit ID for All Native Placements: ca-app-pub-8155064094205693/3524280135
  * Approved Rewarded Ad Unit ID for DJ Crossfade Switching: ca-app-pub-8155064094205693/2082546817
+ * Five Approved Native Advanced Ad Unit IDs:
  */
-const val ADMOB_NATIVE_AD_UNIT_ID = "ca-app-pub-8155064094205693/3524280135"
-const val ADMOB_SONGS_NATIVE_AD_UNIT_ID = "ca-app-pub-8155064094205693/3524280135"
+const val NATIVE_AD_UNIT_1 = "ca-app-pub-8155064094205693/7166498907" // Songs List
+const val NATIVE_AD_UNIT_2 = "ca-app-pub-8155064094205693/8340601899" // Albums Grid
+const val NATIVE_AD_UNIT_3 = "ca-app-pub-8155064094205693/6655363017" // Artists Grid
+const val NATIVE_AD_UNIT_4 = "ca-app-pub-8155064094205693/3417071560" // Active Queue & Category/Folder Songs
+const val NATIVE_AD_UNIT_5 = "ca-app-pub-8155064094205693/3662368162" // Playlists Bottom Card & Playlist Dialog
+
+const val ADMOB_NATIVE_AD_UNIT_ID = NATIVE_AD_UNIT_2
+const val ADMOB_SONGS_NATIVE_AD_UNIT_ID = NATIVE_AD_UNIT_1
 const val ADMOB_REWARDED_AD_UNIT_ID = "ca-app-pub-8155064094205693/2082546817"
 
 /**
@@ -236,7 +242,7 @@ fun <T> buildGridItemsWithAds(
  * Requirement:
  *   - If songs are below 10: 0 ads (don't show ad)
  *   - If songs >= 10: 1 ad for every 10 songs
- * Uses Songs Unit ID: ca-app-pub-8155064094205693/9416731068
+ * Uses Approved Native Unit ID: ca-app-pub-8155064094205693/7166498907
  */
 @Composable
 fun rememberSongNativeAdsState(
@@ -900,14 +906,15 @@ private fun populateSongNativeAdView(nativeAdView: NativeAdView, nativeAd: Nativ
  */
 @Composable
 fun PlaylistNativeAdCard(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    adUnitId: String = NATIVE_AD_UNIT_5
 ) {
     val context = LocalContext.current
     var nativeAd by remember { mutableStateOf<NativeAd?>(null) }
     var isFailed by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        val adLoader = AdLoader.Builder(context, ADMOB_NATIVE_AD_UNIT_ID)
+    LaunchedEffect(adUnitId) {
+        val adLoader = AdLoader.Builder(context, adUnitId)
             .forNativeAd { ad ->
                 nativeAd = ad
             }

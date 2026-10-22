@@ -1073,7 +1073,10 @@ fun ActiveQueueScreen(
                 }
             }
         } else {
-            val adsState = rememberSongNativeAdsState(itemCount = currentQueueTracks.size)
+            val adsState = rememberSongNativeAdsState(
+                itemCount = currentQueueTracks.size,
+                adUnitId = NATIVE_AD_UNIT_4
+            )
             val queueItemsWithAds = remember(currentQueueTracks, adsState.failedAdIndices) {
                 buildSongItemsWithAds(realItems = currentQueueTracks, failedAdIndices = adsState.failedAdIndices)
             }
@@ -1197,8 +1200,11 @@ fun SongsListScreen(
     }
 
     // Native Ad State for Songs list: Show ad after every 10 songs, if songs < 10 don't show ad
-    // Uses Songs Unit ID: ca-app-pub-8155064094205693/9416731068
-    val adsState = rememberSongNativeAdsState(itemCount = filteredTracks.size)
+    // Uses Approved Native Unit ID 1: ca-app-pub-8155064094205693/7166498907
+    val adsState = rememberSongNativeAdsState(
+        itemCount = filteredTracks.size,
+        adUnitId = NATIVE_AD_UNIT_1
+    )
     val songListItems = remember(filteredTracks, adsState.failedAdIndices.toList()) {
         buildSongItemsWithAds(realItems = filteredTracks, failedAdIndices = adsState.failedAdIndices)
     }
@@ -1474,7 +1480,10 @@ fun CategorySongsDetailView(
                 )
             }
         } else {
-            val adsState = rememberSongNativeAdsState(itemCount = tracks.size)
+            val adsState = rememberSongNativeAdsState(
+                itemCount = tracks.size,
+                adUnitId = NATIVE_AD_UNIT_4
+            )
             val songItemsWithAds = remember(tracks, adsState.failedAdIndices) {
                 buildSongItemsWithAds(realItems = tracks, failedAdIndices = adsState.failedAdIndices)
             }
@@ -1727,8 +1736,11 @@ fun AlbumGridScreen(
             onMoreClicked = onMoreClicked
         )
     } else {
-        // Requirement 10: Preload Native Ads in advance for Albums screen
-        val adsState = rememberNativeAdsState(itemCount = albumList.size)
+        // Requirement: Preload Native Ads for Albums screen using NATIVE_AD_UNIT_2
+        val adsState = rememberNativeAdsState(
+            itemCount = albumList.size,
+            adUnitId = NATIVE_AD_UNIT_2
+        )
 
         // Requirement 7, 8, 9, 11: Construct grid list inserting 1 Native Ad after every 5 real items (max 3 per screen)
         val gridItems = buildGridItemsWithAds(realItems = albumList, failedAdIndices = adsState.failedAdIndices)
@@ -1843,8 +1855,11 @@ fun ArtistGridScreen(
             onMoreClicked = onMoreClicked
         )
     } else {
-        // Requirement 10: Preload Native Ads in advance for Artists screen
-        val adsState = rememberNativeAdsState(itemCount = artistList.size)
+        // Requirement: Preload Native Ads for Artists screen using NATIVE_AD_UNIT_3
+        val adsState = rememberNativeAdsState(
+            itemCount = artistList.size,
+            adUnitId = NATIVE_AD_UNIT_3
+        )
 
         // Requirement 7, 8, 9, 11: Construct grid list inserting 1 Native Ad after every 5 real items (max 3 per screen)
         val gridItems = buildGridItemsWithAds(realItems = artistList, failedAdIndices = adsState.failedAdIndices)
@@ -2099,7 +2114,7 @@ fun PlaylistsScreen(
         }
 
         item {
-            PlaylistNativeAdCard()
+            PlaylistNativeAdCard(adUnitId = NATIVE_AD_UNIT_5)
         }
     }
 }
@@ -3042,7 +3057,10 @@ fun PlaylistDetailDialog(
                         Text("No tracks added. Go to Songs list and pick 'Add to Custom Playlist' from options!", color = TextMuted, textAlign = TextAlign.Center)
                     }
                 } else {
-                    val adsState = rememberSongNativeAdsState(itemCount = playlistTracks.size)
+                    val adsState = rememberSongNativeAdsState(
+                        itemCount = playlistTracks.size,
+                        adUnitId = NATIVE_AD_UNIT_5
+                    )
                     val playlistItemsWithAds = remember(playlistTracks, adsState.failedAdIndices) {
                         buildSongItemsWithAds(realItems = playlistTracks, failedAdIndices = adsState.failedAdIndices)
                     }
@@ -3155,11 +3173,9 @@ fun DjCrossfadeSettingsSection(
             Switch(
                 checked = crossfadeEnabled && crossfadeSec > 0,
                 onCheckedChange = { isChecked ->
-                    CrossfadeRewardedAdManager.showAd(context) {
-                        viewModel.playbackManager.setCrossfadeEnabled(isChecked)
-                        if (isChecked && crossfadeSec == 0) {
-                            viewModel.playbackManager.setCrossfadeSec(20)
-                        }
+                    viewModel.playbackManager.setCrossfadeEnabled(isChecked)
+                    if (isChecked && crossfadeSec == 0) {
+                        viewModel.playbackManager.setCrossfadeSec(20)
                     }
                 },
                 colors = SwitchDefaults.colors(
@@ -3207,12 +3223,15 @@ fun DjCrossfadeSettingsSection(
                 FilterChip(
                     selected = isSelected,
                     onClick = {
-                        CrossfadeRewardedAdManager.showAd(context) {
-                            viewModel.playbackManager.setCrossfadeSec(sec)
-                            if (sec == 0) {
-                                viewModel.playbackManager.setCrossfadeEnabled(false)
-                            } else {
-                                viewModel.playbackManager.setCrossfadeEnabled(true)
+                        // Only trigger rewarded ad when user actually changes to another second
+                        if (sec != crossfadeSec) {
+                            CrossfadeRewardedAdManager.showAd(context) {
+                                viewModel.playbackManager.setCrossfadeSec(sec)
+                                if (sec == 0) {
+                                    viewModel.playbackManager.setCrossfadeEnabled(false)
+                                } else {
+                                    viewModel.playbackManager.setCrossfadeEnabled(true)
+                                }
                             }
                         }
                     },
@@ -3235,7 +3254,7 @@ fun DjCrossfadeSettingsSection(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Duration Slider (0 to 20 seconds) with Rewarded Ad on switch
+        // Duration Slider (0 to 20 seconds) - rewarded ad only when user changes to another second
         Slider(
             value = (if (crossfadeEnabled) localSliderSec else 0f).coerceIn(0f, 20f),
             onValueChange = { newVal ->
@@ -3243,10 +3262,15 @@ fun DjCrossfadeSettingsSection(
             },
             onValueChangeFinished = {
                 val s = localSliderSec.toInt()
-                CrossfadeRewardedAdManager.showAd(context) {
-                    viewModel.playbackManager.setCrossfadeSec(s)
-                    if (s > 0) {
-                        viewModel.playbackManager.setCrossfadeEnabled(true)
+                // Only trigger rewarded ad when user actually changes to another second
+                if (s != crossfadeSec) {
+                    CrossfadeRewardedAdManager.showAd(context) {
+                        viewModel.playbackManager.setCrossfadeSec(s)
+                        if (s > 0) {
+                            viewModel.playbackManager.setCrossfadeEnabled(true)
+                        } else {
+                            viewModel.playbackManager.setCrossfadeEnabled(false)
+                        }
                     }
                 }
             },
