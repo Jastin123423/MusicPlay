@@ -9,6 +9,7 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -35,15 +36,89 @@ import com.google.android.gms.ads.nativead.NativeAd
 import com.example.data.MusicTrack
 import com.google.android.gms.ads.nativead.NativeAdOptions
 import com.google.android.gms.ads.nativead.NativeAdView
+import com.google.android.gms.ads.rewarded.RewardedAd
+import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
+import com.google.android.gms.ads.FullScreenContentCallback
 
 /**
  * AdMob Configuration Constants
- * Requirement: Official App ID ca-app-pub-8155064094205693~4470440036 declared in AndroidManifest
- * Native Advanced Ad Unit ID for Album & Artist Grids: ca-app-pub-8155064094205693/4658142293
- * Native Advanced Ad Unit ID for Songs List: ca-app-pub-8155064094205693/9416731068
+ * Official App ID: ca-app-pub-8155064094205693~4470440036 (declared in AndroidManifest.xml)
+ * Approved Native Advanced Ad Unit ID for All Native Placements: ca-app-pub-8155064094205693/3524280135
+ * Approved Rewarded Ad Unit ID for DJ Crossfade Switching: ca-app-pub-8155064094205693/2082546817
  */
-const val ADMOB_NATIVE_AD_UNIT_ID = "ca-app-pub-8155064094205693/4658142293"
-const val ADMOB_SONGS_NATIVE_AD_UNIT_ID = "ca-app-pub-8155064094205693/9416731068"
+const val ADMOB_NATIVE_AD_UNIT_ID = "ca-app-pub-8155064094205693/3524280135"
+const val ADMOB_SONGS_NATIVE_AD_UNIT_ID = "ca-app-pub-8155064094205693/3524280135"
+const val ADMOB_REWARDED_AD_UNIT_ID = "ca-app-pub-8155064094205693/2082546817"
+
+/**
+ * Helper to locate the hosting Activity from Context.
+ */
+fun Context.findActivity(): android.app.Activity? {
+    var ctx = this
+    while (ctx is android.content.ContextWrapper) {
+        if (ctx is android.app.Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
+}
+
+/**
+ * Singleton manager to preload and show AdMob Rewarded Ads when switching DJ Crossfade seconds.
+ */
+object CrossfadeRewardedAdManager {
+    private var rewardedAd: RewardedAd? = null
+    private var isLoading = false
+
+    fun preload(context: Context) {
+        if (rewardedAd != null || isLoading) return
+        isLoading = true
+        val adRequest = AdRequest.Builder().build()
+        RewardedAd.load(
+            context.applicationContext,
+            ADMOB_REWARDED_AD_UNIT_ID,
+            adRequest,
+            object : RewardedAdLoadCallback() {
+                override fun onAdLoaded(ad: RewardedAd) {
+                    rewardedAd = ad
+                    isLoading = false
+                    Log.d("AdMobRewarded", "Crossfade rewarded ad preloaded successfully")
+                }
+
+                override fun onAdFailedToLoad(error: LoadAdError) {
+                    rewardedAd = null
+                    isLoading = false
+                    Log.w("AdMobRewarded", "Failed to load crossfade rewarded ad: ${error.message}")
+                }
+            }
+        )
+    }
+
+    fun showAd(context: Context, onComplete: () -> Unit) {
+        val activity = context.findActivity()
+        val ad = rewardedAd
+        if (activity != null && ad != null) {
+            ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+                override fun onAdDismissedFullScreenContent() {
+                    rewardedAd = null
+                    preload(context)
+                    onComplete()
+                }
+
+                override fun onAdFailedToShowFullScreenContent(adError: com.google.android.gms.ads.AdError) {
+                    rewardedAd = null
+                    preload(context)
+                    onComplete()
+                }
+            }
+            ad.show(activity) { rewardItem ->
+                Log.d("AdMobRewarded", "User earned reward: ${rewardItem.amount} ${rewardItem.type}")
+            }
+        } else {
+            preload(context)
+            onComplete()
+        }
+    }
+}
 
 /**
  * Sealed wrapper class to insert Native Ads into the Songs LazyColumn alongside real song tracks.
@@ -63,8 +138,6 @@ sealed class GridItemWrapper<out T> {
 
 /**
  * State holder for preloading and caching Native Ads.
- * Requirement 10: Loads Native Ads in advance and reuses them during scrolling.
- * Requirement 11: Tracks failed ads so placeholders can be automatically removed.
  */
 @Stable
 class NativeAdsState {
@@ -73,12 +146,8 @@ class NativeAdsState {
 }
 
 /**
- * Remembers and preloads AdMob Native Ads based on item count rules.
- * Requirement 8: Maximum of 3 Native Ads per screen.
- * Requirement 9:
- *   - < 10 items: 1 ad
- *   - 10-20 items: 2 ads
- *   - 21+ items: 3 ads
+ * Remembers and preloads AdMob Native Ads for Artist and Album grids.
+ * Cadence rule: 1 ad after every 3 items (1, 2, 3, ad, 4, 5, 6, ad and more).
  */
 @Composable
 fun rememberNativeAdsState(
@@ -88,15 +157,13 @@ fun rememberNativeAdsState(
     val context = LocalContext.current
     val state = remember { NativeAdsState() }
 
-    val requiredAdsCount = when {
-        itemCount < 10 -> 1
-        itemCount in 10..20 -> 2
-        else -> 3
-    }
+    val requiredAdsCount = if (itemCount < 3) 0 else (itemCount / 3).coerceAtMost(20)
 
     LaunchedEffect(itemCount, adUnitId) {
         state.loadedAds.clear()
         state.failedAdIndices.clear()
+
+        if (requiredAdsCount == 0) return@LaunchedEffect
 
         for (i in 0 until requiredAdsCount) {
             val adIndex = i
@@ -106,7 +173,7 @@ fun rememberNativeAdsState(
                 }
                 .withAdListener(object : AdListener() {
                     override fun onAdFailedToLoad(loadAdError: LoadAdError) {
-                        Log.e("AdMobNative", "Ad $adIndex failed to load: ${loadAdError.message}")
+                        Log.e("AdMobNative", "Grid Ad $adIndex failed to load: ${loadAdError.message}")
                         state.failedAdIndices.add(adIndex)
                     }
                 })
@@ -133,9 +200,7 @@ fun rememberNativeAdsState(
 
 /**
  * Combines real list items with Native Ad items according to AdMob placement policies.
- * Requirement 7: Inserts one Native Ad after every 5 real items.
- * Requirement 8: Max 3 Native Ads per screen.
- * Requirement 11: Automatically removes ad placeholders if ad loading fails.
+ * Requirement: In artist and album grids, show ad card as the third item: 1, 2, 3, ad, 4, 5, 6, ad and more.
  */
 fun <T> buildGridItemsWithAds(
     realItems: List<T>,
@@ -144,11 +209,7 @@ fun <T> buildGridItemsWithAds(
     if (realItems.isEmpty()) return emptyList()
 
     val count = realItems.size
-    val maxAdsAllowed = when {
-        count < 10 -> 1
-        count in 10..20 -> 2
-        else -> 3
-    }
+    val maxAdsAllowed = if (count < 3) 0 else (count / 3).coerceAtMost(20)
 
     val result = mutableListOf<GridItemWrapper<T>>()
     var adsInserted = 0
@@ -157,21 +218,13 @@ fun <T> buildGridItemsWithAds(
         result.add(GridItemWrapper.RealItem(realItems[i]))
         val itemNum = i + 1
 
-        // Insert Native Ad after every 5 real items
-        if (itemNum % 5 == 0 && adsInserted < maxAdsAllowed) {
+        // Insert Native Ad after every 3 real items (1, 2, 3, ad, 4, 5, 6, ad and more)
+        if (itemNum % 3 == 0 && adsInserted < maxAdsAllowed) {
             val currentAdIndex = adsInserted
             adsInserted++
-            // Requirement 11: If ad failed to load, omit placeholder to keep grid seamless
             if (!failedAdIndices.contains(currentAdIndex)) {
                 result.add(GridItemWrapper.NativeAdItem(currentAdIndex))
             }
-        }
-    }
-
-    // Edge Case: If items < 5 (e.g. 1-4 items), requirement 9 requires 1 ad for < 10 items
-    if (adsInserted == 0 && maxAdsAllowed > 0) {
-        if (!failedAdIndices.contains(0)) {
-            result.add(GridItemWrapper.NativeAdItem(0))
         }
     }
 
@@ -194,8 +247,8 @@ fun rememberSongNativeAdsState(
     val state = remember { NativeAdsState() }
 
     // If songs are below 10, don't load or show any ads.
-    // If 10 or more, load 1 ad after every 10 songs (capped at 8 for optimal performance).
-    val requiredAdsCount = if (itemCount < 10) 0 else (itemCount / 10).coerceAtMost(8)
+    // If 10 or more, load 1 ad after every 10 songs.
+    val requiredAdsCount = if (itemCount < 10) 0 else (itemCount / 10).coerceAtMost(25)
 
     LaunchedEffect(itemCount, adUnitId) {
         state.loadedAds.clear()
@@ -840,4 +893,59 @@ private fun populateSongNativeAdView(nativeAdView: NativeAdView, nativeAd: Nativ
         }
     }
     nativeAdView.setNativeAd(nativeAd)
+}
+
+/**
+ * Native Advanced Ad Card placed at the bottom of Playlists screen below promotional cards.
+ */
+@Composable
+fun PlaylistNativeAdCard(
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    var nativeAd by remember { mutableStateOf<NativeAd?>(null) }
+    var isFailed by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        val adLoader = AdLoader.Builder(context, ADMOB_NATIVE_AD_UNIT_ID)
+            .forNativeAd { ad ->
+                nativeAd = ad
+            }
+            .withAdListener(object : AdListener() {
+                override fun onAdFailedToLoad(loadAdError: LoadAdError) {
+                    Log.e("AdMobNative", "Playlist Native Ad failed to load: ${loadAdError.message}")
+                    isFailed = true
+                }
+            })
+            .withNativeAdOptions(
+                NativeAdOptions.Builder()
+                    .setAdChoicesPlacement(NativeAdOptions.ADCHOICES_TOP_RIGHT)
+                    .build()
+            )
+            .build()
+
+        adLoader.loadAd(AdRequest.Builder().build())
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            nativeAd?.destroy()
+        }
+    }
+
+    if (!isFailed) {
+        Card(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = SpaceCardBg),
+            border = BorderStroke(1.dp, TealPrimary.copy(alpha = 0.25f))
+        ) {
+            SongNativeAdRow(
+                nativeAd = nativeAd,
+                modifier = Modifier.padding(vertical = 4.dp)
+            )
+        }
+    }
 }

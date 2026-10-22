@@ -1073,90 +1073,107 @@ fun ActiveQueueScreen(
                 }
             }
         } else {
+            val adsState = rememberSongNativeAdsState(itemCount = currentQueueTracks.size)
+            val queueItemsWithAds = remember(currentQueueTracks, adsState.failedAdIndices) {
+                buildSongItemsWithAds(realItems = currentQueueTracks, failedAdIndices = adsState.failedAdIndices)
+            }
+
             LazyColumn(modifier = Modifier.fillMaxSize()) {
-                itemsIndexed(currentQueueTracks) { index, track ->
-                    val isPlayingNow = activeTrack?.id == track.id
-                    val cardBg = if (isPlayingNow) SpacePlayerBg else Color.Transparent
-                    
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(cardBg)
-                            .clickable {
-                                viewModel.playbackManager.playTrack(track, currentQueueTracks, index)
-                            }
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                            Box(
+                items(queueItemsWithAds) { wrapper ->
+                    when (wrapper) {
+                        is SongListItemWrapper.SongItem -> {
+                            val track = wrapper.track
+                            val index = currentQueueTracks.indexOf(track).coerceAtLeast(0)
+                            val isPlayingNow = activeTrack?.id == track.id
+                            val cardBg = if (isPlayingNow) SpacePlayerBg else Color.Transparent
+
+                            Row(
                                 modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(RoundedCornerShape(6.dp)),
-                                contentAlignment = Alignment.Center
+                                    .fillMaxWidth()
+                                    .background(cardBg)
+                                    .clickable {
+                                        viewModel.playbackManager.playTrack(track, currentQueueTracks, index)
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                TrackAlbumArt(track = track, modifier = Modifier.fillMaxSize())
-                                if (isPlayingNow) {
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                                     Box(
                                         modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(Color.Black.copy(alpha = 0.4f)),
+                                            .size(40.dp)
+                                            .clip(RoundedCornerShape(6.dp)),
                                         contentAlignment = Alignment.Center
                                     ) {
+                                        TrackAlbumArt(track = track, modifier = Modifier.fillMaxSize())
+                                        if (isPlayingNow) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(Color.Black.copy(alpha = 0.4f)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Filled.VolumeUp,
+                                                    contentDescription = "Playing",
+                                                    tint = TealPrimary,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            text = track.title,
+                                            color = if (isPlayingNow) TealPrimary else TextLight,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "${track.artist} • ${track.album}",
+                                            color = TextMuted,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = formatTime(track.durationSec),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = TextMuted,
+                                        modifier = Modifier.padding(horizontal = 8.dp)
+                                    )
+                                    IconButton(onClick = { viewModel.removeTrackFromActiveQueue(index) }) {
                                         Icon(
-                                            imageVector = Icons.Filled.VolumeUp,
-                                            contentDescription = "Playing",
-                                            tint = TealPrimary,
-                                            modifier = Modifier.size(20.dp)
+                                            imageVector = Icons.Filled.Close,
+                                            contentDescription = "Remove",
+                                            tint = TextMuted,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    IconButton(onClick = { onMoreClicked(track) }) {
+                                        Icon(
+                                            imageVector = Icons.Filled.MoreVert,
+                                            contentDescription = "Options",
+                                            tint = TextLight
                                         )
                                     }
                                 }
                             }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text(
-                                    text = track.title,
-                                    color = if (isPlayingNow) TealPrimary else TextLight,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = "${track.artist} • ${track.album}",
-                                    color = TextMuted,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
+                            HorizontalDivider(color = SpaceCardBg.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
                         }
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = formatTime(track.durationSec),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextMuted,
-                                modifier = Modifier.padding(horizontal = 8.dp)
-                            )
-                            IconButton(onClick = { viewModel.removeTrackFromActiveQueue(index) }) {
-                                Icon(
-                                    imageVector = Icons.Filled.Close,
-                                    contentDescription = "Remove",
-                                    tint = TextMuted,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                            IconButton(onClick = { onMoreClicked(track) }) {
-                                Icon(
-                                    imageVector = Icons.Filled.MoreVert,
-                                    contentDescription = "Options",
-                                    tint = TextLight
-                                )
-                            }
+                        is SongListItemWrapper.NativeAdItem -> {
+                            // Show ad after every 10 songs in queue
+                            val nativeAd = adsState.loadedAds[wrapper.adIndex]
+                            SongNativeAdRow(nativeAd = nativeAd)
+                            HorizontalDivider(color = SpaceCardBg.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
                         }
                     }
-                    HorizontalDivider(color = SpaceCardBg.copy(alpha = 0.5f), modifier = Modifier.padding(horizontal = 16.dp))
                 }
             }
         }
@@ -1457,64 +1474,85 @@ fun CategorySongsDetailView(
                 )
             }
         } else {
+            val adsState = rememberSongNativeAdsState(itemCount = tracks.size)
+            val songItemsWithAds = remember(tracks, adsState.failedAdIndices) {
+                buildSongItemsWithAds(realItems = tracks, failedAdIndices = adsState.failedAdIndices)
+            }
+
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                itemsIndexed(tracks) { index, track ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                onPlayTrack(track, tracks)
-                            },
-                        colors = CardDefaults.cardColors(containerColor = SpaceCardBg.copy(alpha = 0.7f)),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.weight(1f)
+                items(songItemsWithAds) { wrapper ->
+                    when (wrapper) {
+                        is SongListItemWrapper.SongItem -> {
+                            val track = wrapper.track
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onPlayTrack(track, tracks)
+                                    },
+                                colors = CardDefaults.cardColors(containerColor = SpaceCardBg.copy(alpha = 0.7f)),
+                                shape = RoundedCornerShape(10.dp)
                             ) {
-                                TrackAlbumArt(
-                                    track = track,
+                                Row(
                                     modifier = Modifier
-                                        .size(44.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column {
-                                    Text(
-                                        text = track.title,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        fontWeight = FontWeight.Bold,
-                                        color = TextLight,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = "${track.artist} • ${formatTime(track.durationSec)}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = TextMuted,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        TrackAlbumArt(
+                                            track = track,
+                                            modifier = Modifier
+                                                .size(44.dp)
+                                                .clip(RoundedCornerShape(8.dp))
+                                        )
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Column {
+                                            Text(
+                                                text = track.title,
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                fontWeight = FontWeight.Bold,
+                                                color = TextLight,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = "${track.artist} • ${formatTime(track.durationSec)}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = TextMuted,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+
+                                    IconButton(onClick = { onMoreClicked(track) }) {
+                                        Icon(
+                                            imageVector = Icons.Filled.MoreVert,
+                                            contentDescription = "Options",
+                                            tint = TextLight
+                                        )
+                                    }
                                 }
                             }
-
-                            IconButton(onClick = { onMoreClicked(track) }) {
-                                Icon(
-                                    imageVector = Icons.Filled.MoreVert,
-                                    contentDescription = "Options",
-                                    tint = TextLight
-                                )
+                        }
+                        is SongListItemWrapper.NativeAdItem -> {
+                            // Show ad after every 10 songs in folder/category
+                            val nativeAd = adsState.loadedAds[wrapper.adIndex]
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = SpaceCardBg.copy(alpha = 0.7f)),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                SongNativeAdRow(nativeAd = nativeAd)
                             }
                         }
                     }
@@ -2046,7 +2084,7 @@ fun PlaylistsScreen(
             }
         }
 
-        // AFTER PLAYLISTS: Professional Share App card & Recommended JobsReport app
+        // AFTER PLAYLISTS: Professional Share App card, Recommended JobsReport app, Join WhatsApp Channel & Native Ad
         item {
             Spacer(modifier = Modifier.height(8.dp))
             ShareAppCard()
@@ -2054,6 +2092,14 @@ fun PlaylistsScreen(
 
         item {
             RecommendedJobsReportCard()
+        }
+
+        item {
+            JoinWhatsAppChannelCard()
+        }
+
+        item {
+            PlaylistNativeAdCard()
         }
     }
 }
@@ -2996,35 +3042,51 @@ fun PlaylistDetailDialog(
                         Text("No tracks added. Go to Songs list and pick 'Add to Custom Playlist' from options!", color = TextMuted, textAlign = TextAlign.Center)
                     }
                 } else {
-                    LazyColumn(modifier = Modifier.weight(1f)) {
-                        items(playlistTracks) { track ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onPlayTrack(track, playlistTracks) }
-                                    .padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                    TrackAlbumArt(
-                                        track = track,
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(RoundedCornerShape(6.dp))
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column {
-                                        Text(track.title, color = TextLight, fontWeight = FontWeight.Bold)
-                                        Text(track.artist, color = TextMuted, style = MaterialTheme.typography.bodySmall)
-                                    }
-                                }
+                    val adsState = rememberSongNativeAdsState(itemCount = playlistTracks.size)
+                    val playlistItemsWithAds = remember(playlistTracks, adsState.failedAdIndices) {
+                        buildSongItemsWithAds(realItems = playlistTracks, failedAdIndices = adsState.failedAdIndices)
+                    }
 
-                                IconButton(onClick = { onRemoveTrack(track.id) }) {
-                                    Icon(Icons.Filled.Delete, "remove", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                    LazyColumn(modifier = Modifier.weight(1f)) {
+                        items(playlistItemsWithAds) { wrapper ->
+                            when (wrapper) {
+                                is SongListItemWrapper.SongItem -> {
+                                    val track = wrapper.track
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { onPlayTrack(track, playlistTracks) }
+                                            .padding(vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                            TrackAlbumArt(
+                                                track = track,
+                                                modifier = Modifier
+                                                    .size(36.dp)
+                                                    .clip(RoundedCornerShape(6.dp))
+                                            )
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Column {
+                                                Text(track.title, color = TextLight, fontWeight = FontWeight.Bold)
+                                                Text(track.artist, color = TextMuted, style = MaterialTheme.typography.bodySmall)
+                                            }
+                                        }
+
+                                        IconButton(onClick = { onRemoveTrack(track.id) }) {
+                                            Icon(Icons.Filled.Delete, "remove", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
+                                        }
+                                    }
+                                    HorizontalDivider(color = SpaceDarkBg.copy(alpha = 0.5f))
+                                }
+                                is SongListItemWrapper.NativeAdItem -> {
+                                    // Show ad after every 10 songs in playlist
+                                    val nativeAd = adsState.loadedAds[wrapper.adIndex]
+                                    SongNativeAdRow(nativeAd = nativeAd)
+                                    HorizontalDivider(color = SpaceDarkBg.copy(alpha = 0.5f))
                                 }
                             }
-                            HorizontalDivider(color = SpaceDarkBg.copy(alpha = 0.5f))
                         }
                     }
                 }
@@ -3042,11 +3104,18 @@ fun DjCrossfadeSettingsSection(
     viewModel: MusicViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val crossfadeEnabled by viewModel.playbackManager.crossfadeEnabled.collectAsState()
     val crossfadeSec by viewModel.playbackManager.crossfadeSec.collectAsState()
     val djModeEnabled by viewModel.playbackManager.djModeEnabled.collectAsState()
     val djCurveType by viewModel.playbackManager.djCurveType.collectAsState()
     val isGapless by viewModel.playbackManager.gaplessEnabled.collectAsState()
+
+    var localSliderSec by remember(crossfadeSec) { mutableFloatStateOf(crossfadeSec.toFloat()) }
+
+    LaunchedEffect(Unit) {
+        CrossfadeRewardedAdManager.preload(context)
+    }
 
     Column(modifier = modifier.fillMaxWidth()) {
         // Crossfade ON / OFF Toggle
@@ -3086,9 +3155,11 @@ fun DjCrossfadeSettingsSection(
             Switch(
                 checked = crossfadeEnabled && crossfadeSec > 0,
                 onCheckedChange = { isChecked ->
-                    viewModel.playbackManager.setCrossfadeEnabled(isChecked)
-                    if (isChecked && crossfadeSec == 0) {
-                        viewModel.playbackManager.setCrossfadeSec(20)
+                    CrossfadeRewardedAdManager.showAd(context) {
+                        viewModel.playbackManager.setCrossfadeEnabled(isChecked)
+                        if (isChecked && crossfadeSec == 0) {
+                            viewModel.playbackManager.setCrossfadeSec(20)
+                        }
                     }
                 },
                 colors = SwitchDefaults.colors(
@@ -3136,11 +3207,13 @@ fun DjCrossfadeSettingsSection(
                 FilterChip(
                     selected = isSelected,
                     onClick = {
-                        viewModel.playbackManager.setCrossfadeSec(sec)
-                        if (sec == 0) {
-                            viewModel.playbackManager.setCrossfadeEnabled(false)
-                        } else {
-                            viewModel.playbackManager.setCrossfadeEnabled(true)
+                        CrossfadeRewardedAdManager.showAd(context) {
+                            viewModel.playbackManager.setCrossfadeSec(sec)
+                            if (sec == 0) {
+                                viewModel.playbackManager.setCrossfadeEnabled(false)
+                            } else {
+                                viewModel.playbackManager.setCrossfadeEnabled(true)
+                            }
                         }
                     },
                     label = {
@@ -3162,12 +3235,20 @@ fun DjCrossfadeSettingsSection(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Duration Slider (0 to 20 seconds)
+        // Duration Slider (0 to 20 seconds) with Rewarded Ad on switch
         Slider(
-            value = (if (crossfadeEnabled) crossfadeSec else 0).toFloat(),
+            value = (if (crossfadeEnabled) localSliderSec else 0f).coerceIn(0f, 20f),
             onValueChange = { newVal ->
-                val s = newVal.toInt()
-                viewModel.playbackManager.setCrossfadeSec(s)
+                localSliderSec = newVal
+            },
+            onValueChangeFinished = {
+                val s = localSliderSec.toInt()
+                CrossfadeRewardedAdManager.showAd(context) {
+                    viewModel.playbackManager.setCrossfadeSec(s)
+                    if (s > 0) {
+                        viewModel.playbackManager.setCrossfadeEnabled(true)
+                    }
+                }
             },
             valueRange = 0f..20f,
             steps = 19,

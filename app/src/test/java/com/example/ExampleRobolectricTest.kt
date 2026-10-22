@@ -29,8 +29,8 @@ class ExampleRobolectricTest {
         val manager = MusicPlaybackManager.getInstance()
         manager.setContext(context)
 
-        // Default crossfade duration must be 8 seconds per user requirement
-        assertEquals(8, manager.crossfadeSec.value)
+        // Default crossfade duration must be 20 seconds per user requirement
+        assertEquals(20, manager.crossfadeSec.value)
         assertTrue(manager.crossfadeEnabled.value)
         assertTrue(manager.djModeEnabled.value)
         assertEquals(DjCurveType.EQUAL_POWER.name, manager.djCurveType.value)
@@ -45,8 +45,8 @@ class ExampleRobolectricTest {
         manager.setCrossfadeSec(-5) // Clamped to 0
         assertEquals(0, manager.crossfadeSec.value)
 
-        manager.setCrossfadeSec(8)
-        assertEquals(8, manager.crossfadeSec.value)
+        manager.setCrossfadeSec(20)
+        assertEquals(20, manager.crossfadeSec.value)
     }
 
     @Test

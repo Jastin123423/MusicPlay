@@ -374,6 +374,17 @@ class MusicPlaybackManager {
             val ctx = appContext
             if (nextTrack.contentUri.isNotBlank() && ctx != null) {
                 try {
+                    // Direct outgoing player completion to completeDjCrossfade so it cannot trigger playNext()
+                    mediaPlayer?.let { outMp ->
+                        outMp.setOnCompletionListener {
+                            completeDjCrossfade()
+                        }
+                        outMp.setOnErrorListener { _, _, _ ->
+                            completeDjCrossfade()
+                            true
+                        }
+                    }
+
                     val preloaded = preloadedMediaPlayer
                     if (preloaded != null && preloadedTrackUri == nextTrack.contentUri) {
                         incomingMediaPlayer = preloaded
@@ -421,9 +432,11 @@ class MusicPlaybackManager {
             val nextTrack = _incomingTrack.value
             val nextIndex = getNextTrackIndex()
 
-            // 1. Release outgoing player cleanly
+            // 1. Release outgoing player cleanly after clearing listeners to avoid stale completion callbacks
             mediaPlayer?.let { oldMp ->
                 try {
+                    oldMp.setOnCompletionListener(null)
+                    oldMp.setOnErrorListener(null)
                     if (oldMp.isPlaying) oldMp.stop()
                     oldMp.release()
                 } catch (_: Exception) {}
@@ -450,12 +463,18 @@ class MusicPlaybackManager {
                 }
             }
 
-            // 3. Update current track and queue metadata
+            // 3. Update current track and queue metadata, preserving incoming playback position (DO NOT reset to 0:00)
             if (nextTrack != null) {
                 _currentTrack.value = nextTrack
                 currentIndex = nextIndex
-                _playbackProgress.value = 0f
-                _currentPositionSec.value = 0
+                if (newMp != null && newMp.duration > 0) {
+                    val pos = newMp.currentPosition
+                    _playbackProgress.value = (pos.toFloat() / newMp.duration.toFloat()).coerceIn(0f, 1f)
+                    _currentPositionSec.value = pos / 1000
+                } else {
+                    _playbackProgress.value = 0f
+                    _currentPositionSec.value = 0
+                }
             }
 
             // 4. Reset crossfade status
@@ -479,14 +498,20 @@ class MusicPlaybackManager {
 
             incomingMediaPlayer?.let { inMp ->
                 try {
+                    inMp.setOnCompletionListener(null)
+                    inMp.setOnErrorListener(null)
                     if (inMp.isPlaying) inMp.stop()
                     inMp.release()
                 } catch (_: Exception) {}
             }
             incomingMediaPlayer = null
 
-            // Restore primary player to normal full volume
-            mediaPlayer?.let { applyVolumeAndBalance(it) }
+            // Restore primary player volume and callbacks
+            mediaPlayer?.let { mp ->
+                applyVolumeAndBalance(mp)
+                mp.setOnCompletionListener { onTrackCompletion() }
+                mp.setOnErrorListener { _, _, _ -> false }
+            }
         }
     }
 
@@ -625,6 +650,12 @@ class MusicPlaybackManager {
     }
 
     private fun onTrackCompletion() {
+        synchronized(crossfadeLock) {
+            if (_isCrossfading.value) {
+                completeDjCrossfade()
+                return
+            }
+        }
         when (_repeatMode.value) {
             RepeatMode.ONE -> {
                 _currentTrack.value?.let { track ->

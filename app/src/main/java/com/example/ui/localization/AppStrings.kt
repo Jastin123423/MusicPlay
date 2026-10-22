@@ -126,7 +126,10 @@ data class AppStrings(
     val jobsReportAppName: String,
     val jobsReportTagline: String,
     val jobsReportDescription: String,
-    val installButton: String
+    val installButton: String,
+    val whatsAppChannelTitle: String,
+    val whatsAppChannelSubtitle: String,
+    val joinWhatsAppButton: String
 )
 
 val EnglishStrings = AppStrings(
@@ -245,7 +248,10 @@ val EnglishStrings = AppStrings(
     jobsReportAppName = "JobsReport",
     jobsReportTagline = "Career & Jobs Finder • Free",
     jobsReportDescription = "Hire, find various Jobs opportunities for free via JobsReport App",
-    installButton = "Install"
+    installButton = "Install",
+    whatsAppChannelTitle = "Join WhatsApp Channel",
+    whatsAppChannelSubtitle = "Follow the MusicPlay - Offline Personal DJ App channel on WhatsApp: https://whatsapp.com/channel/0029Vb9C8npHAdNeSfsCpa1v",
+    joinWhatsAppButton = "Follow Channel"
 )
 
 val FrenchStrings = AppStrings(
@@ -364,7 +370,10 @@ val FrenchStrings = AppStrings(
     jobsReportAppName = "JobsReport",
     jobsReportTagline = "Recherche d'emploi et carrière • Gratuit",
     jobsReportDescription = "Recrutez et trouvez diverses opportunités d'emploi gratuitement via l'application JobsReport",
-    installButton = "Installer"
+    installButton = "Installer",
+    whatsAppChannelTitle = "Rejoindre la chaîne WhatsApp",
+    whatsAppChannelSubtitle = "Suivez la chaîne MusicPlay - Offline Personal DJ App sur WhatsApp : https://whatsapp.com/channel/0029Vb9C8npHAdNeSfsCpa1v",
+    joinWhatsAppButton = "Suivre la chaîne"
 )
 
 val PortugueseStrings = AppStrings(
@@ -483,7 +492,10 @@ val PortugueseStrings = AppStrings(
     jobsReportAppName = "JobsReport",
     jobsReportTagline = "Busca de empregos e carreiras • Grátis",
     jobsReportDescription = "Contrate e encontre várias oportunidades de emprego gratuitamente pelo aplicativo JobsReport",
-    installButton = "Instalar"
+    installButton = "Instalar",
+    whatsAppChannelTitle = "Entrar no canal do WhatsApp",
+    whatsAppChannelSubtitle = "Siga o canal MusicPlay - Offline Personal DJ App no WhatsApp: https://whatsapp.com/channel/0029Vb9C8npHAdNeSfsCpa1v",
+    joinWhatsAppButton = "Seguir canal"
 )
 
 val ArabicStrings = AppStrings(
@@ -602,7 +614,10 @@ val ArabicStrings = AppStrings(
     jobsReportAppName = "JobsReport",
     jobsReportTagline = "البحث عن وظائف ومهن • مجاني",
     jobsReportDescription = "وظّف واعثر على فرص عمل متنوعة مجانًا عبر تطبيق JobsReport",
-    installButton = "تثبيت"
+    installButton = "تثبيت",
+    whatsAppChannelTitle = "الانضمام إلى قناة واتساب",
+    whatsAppChannelSubtitle = "تابع قناة MusicPlay - Offline Personal DJ App على واتساب: https://whatsapp.com/channel/0029Vb9C8npHAdNeSfsCpa1v",
+    joinWhatsAppButton = "متابعة القناة"
 )
 
 fun getAppStrings(language: AppLanguage): AppStrings {

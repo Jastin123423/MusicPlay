@@ -352,3 +352,132 @@ fun RecommendedJobsReportCard(
         }
     }
 }
+
+const val WHATSAPP_CHANNEL_URL = "https://whatsapp.com/channel/0029Vb9C8npHAdNeSfsCpa1v"
+
+/**
+ * Professional Join WhatsApp Channel card for Playlists screen.
+ * Links to official channel: https://whatsapp.com/channel/0029Vb9C8npHAdNeSfsCpa1v
+ */
+@Composable
+fun JoinWhatsAppChannelCard(
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val strings = LocalAppStrings.current
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("join_whatsapp_channel_card")
+            .clickable { openUrl(context, WHATSAPP_CHANNEL_URL) },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = SpaceCardBg),
+        border = BorderStroke(1.dp, Color(0xFF25D366).copy(alpha = 0.45f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // WhatsApp Icon Badge in WhatsApp Green gradient
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(Color(0xFF25D366), Color(0xFF128C7E))
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Share,
+                        contentDescription = strings.whatsAppChannelTitle,
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(14.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = strings.whatsAppChannelTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = TextLight,
+                            fontSize = 17.sp
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = Color(0xFF25D366).copy(alpha = 0.2f)
+                        ) {
+                            Text(
+                                text = "COMMUNITY",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF25D366),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "MusicPlay - Offline Personal DJ App",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color(0xFF86EFAC),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Description: "Follow the MusicPlay - Offline Personal DJ App channel on WhatsApp: https://whatsapp.com/channel/0029Vb9C8npHAdNeSfsCpa1v"
+            Text(
+                text = strings.whatsAppChannelSubtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = TextLight.copy(alpha = 0.92f),
+                lineHeight = 20.sp
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Follow button
+            Button(
+                onClick = { openUrl(context, WHATSAPP_CHANNEL_URL) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("follow_whatsapp_channel_button"),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF25D366),
+                    contentColor = Color.White
+                ),
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(vertical = 10.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.OpenInNew,
+                    contentDescription = strings.joinWhatsAppButton,
+                    modifier = Modifier.size(18.dp),
+                    tint = Color.White
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = strings.joinWhatsAppButton,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    color = Color.White
+                )
+            }
+        }
+    }
+}
